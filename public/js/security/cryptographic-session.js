@@ -438,15 +438,11 @@ function generateJti() {
     const publicKeyJwk = await getPublicKeyJwk();
 
     if (!privateKey) {
-        throw new Error(
-            'Private key tidak ditemukan di IndexedDB.'
-        );
+        throw new Error('Private key tidak ditemukan.');
     }
 
     if (!bindingId) {
-        throw new Error(
-            'Binding ID tidak ditemukan di IndexedDB.'
-        );
+        throw new Error('Binding ID tidak ditemukan.');
     }
 
     const header = {
