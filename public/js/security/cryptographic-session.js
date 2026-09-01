@@ -269,6 +269,71 @@
     return valid;
 }
 
+    function generateJti() {
+    if (window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+function canonicalizeProof(proof) {
+    return [
+        proof.jti,
+        proof.iat,
+        proof.htm,
+        proof.htu,
+        proof.sid
+    ].join('\n');
+}
+
+    async function createSessionProof() {
+    const privateKey = await getPrivateKey();
+
+    if (!privateKey) {
+        throw new Error('Private key tidak ditemukan.');
+    }
+
+    const proof = {
+        jti: generateJti(),
+        iat: Math.floor(Date.now() / 1000),
+        htm: 'POST',
+        htu: '/security/session-proof',
+        sid: 'current-session-binding'
+    };
+
+    const canonical = canonicalizeProof(proof);
+
+    const data = new TextEncoder().encode(canonical);
+
+    const signature = await window.crypto.subtle.sign(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        privateKey,
+        data
+    );
+
+    const signatureBase64 = btoa(
+        String.fromCharCode(...new Uint8Array(signature))
+    );
+
+    console.log('[CSB] Session proof berhasil dibuat.');
+
+    return {
+        ...proof,
+        signature: signatureBase64
+    };
+}
+
+
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
@@ -277,6 +342,9 @@
         registerPublicKey,
         signTestMessage,
         verifyTestSignature,
-        testLocalSignature
+        testLocalSignature,
+        signTestMessage,
+        verifyTestSignature,
+        createSessionProof
     };
 })();
