@@ -50,6 +50,52 @@
         });
     }
 
+    async function saveValue(name, value) {
+    const db = await openDatabase();
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(
+            STORE_NAME,
+            'readwrite'
+        );
+
+        const store = transaction.objectStore(STORE_NAME);
+
+        const request = store.put(value, name);
+
+        request.onsuccess = function () {
+            resolve();
+        };
+
+        request.onerror = function () {
+            reject(request.error);
+        };
+    });
+}
+
+    async function getValue(name) {
+    const db = await openDatabase();
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(
+            STORE_NAME,
+            'readonly'
+        );
+
+        const store = transaction.objectStore(STORE_NAME);
+
+        const request = store.get(name);
+
+        request.onsuccess = function () {
+            resolve(request.result ?? null);
+        };
+
+        request.onerror = function () {
+            reject(request.error);
+        };
+    });
+}
+
     async function getKey(name) {
         const db = await openDatabase();
 
@@ -154,7 +200,7 @@
         throw new Error('CSRF token tidak ditemukan.');
     }
 
-    const response = await fetch('admin/security/session-binding', {
+    const response = await fetch('/security/session-binding', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -175,9 +221,26 @@
         );
     }
 
-    console.log('[CSB] Public key berhasil di-bind.', data);
+    await saveValue(
+        'binding-id',
+        data.binding_id
+    );
+
+    console.log(
+        '[CSB] Public key berhasil di-bind.',
+        data
+    );
+
+    console.log(
+        '[CSB] Binding ID disimpan:',
+        data.binding_id
+    );
 
     return data;
+}
+
+    async function getBindingId() {
+    return await getValue('binding-id');
 }
 
     async function signTestMessage(message = 'CSB_TEST_MESSAGE') {
@@ -340,11 +403,9 @@ function canonicalizeProof(proof) {
         getPublicKey,
         exportPublicKeyJwk,
         registerPublicKey,
-        signTestMessage,
-        verifyTestSignature,
+        getBindingId,
         testLocalSignature,
         signTestMessage,
-        verifyTestSignature,
-        createSessionProof
+        verifyTestSignature
     };
 })();

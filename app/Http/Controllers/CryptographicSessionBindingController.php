@@ -33,10 +33,25 @@ class CryptographicSessionBindingController extends Controller
             ->first();
 
         if ($existing) {
+            $existingKey = $existing->public_key;
+            $incomingKey = $validated['public_key'];
+
+            $sameKey =
+                ($existingKey['kty'] ?? null) === ($incomingKey['kty'] ?? null) &&
+                ($existingKey['crv'] ?? null) === ($incomingKey['crv'] ?? null) &&
+                ($existingKey['x'] ?? null) === ($incomingKey['x'] ?? null) &&
+                ($existingKey['y'] ?? null) === ($incomingKey['y'] ?? null);
+
+            if (!$sameKey) {
+                return response()->json([
+                    'message' => 'Session sudah terikat dengan public key yang berbeda.',
+                ], 409);
+            }
+
             return response()->json([
-                'message' => 'Session sudah memiliki cryptographic binding.',
+                'message' => 'Cryptographic session binding sudah tersedia.',
                 'binding_id' => $existing->id,
-            ], 409);
+            ], 200);
         }
 
         $binding = CryptographicSessionBinding::create([
