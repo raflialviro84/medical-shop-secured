@@ -239,6 +239,10 @@
     return data;
 }
 
+    async function getPublicKeyJwk() {
+    return await exportPublicKeyJwk();
+}
+
     async function getBindingId() {
     return await getValue('binding-id');
 }
@@ -395,7 +399,107 @@ function canonicalizeProof(proof) {
     };
 }
 
+    function base64UrlEncode(bytes) {
+    let binary = '';
 
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
+}
+
+function stringToBase64Url(value) {
+    return base64UrlEncode(
+        new TextEncoder().encode(value)
+    );
+}
+
+function generateJti() {
+    if (window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+    async function createCryptographicProof() {
+    const privateKey = await getPrivateKey();
+    const bindingId = await getBindingId();
+    const publicKeyJwk = await getPublicKeyJwk();
+
+    if (!privateKey) {
+        throw new Error(
+            'Private key tidak ditemukan di IndexedDB.'
+        );
+    }
+
+    if (!bindingId) {
+        throw new Error(
+            'Binding ID tidak ditemukan di IndexedDB.'
+        );
+    }
+
+    const header = {
+        typ: 'csb+jwt',
+        alg: 'ES256',
+        jwk: publicKeyJwk
+    };
+
+    const payload = {
+        jti: generateJti(),
+        iat: Math.floor(Date.now() / 1000),
+        htm: 'POST',
+        htu: '/security/session-proof',
+        binding_id: bindingId
+    };
+
+    const encodedHeader = stringToBase64Url(
+        JSON.stringify(header)
+    );
+
+    const encodedPayload = stringToBase64Url(
+        JSON.stringify(payload)
+    );
+
+    const signingInput =
+        `${encodedHeader}.${encodedPayload}`;
+
+    const signature = await window.crypto.subtle.sign(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        privateKey,
+        new TextEncoder().encode(signingInput)
+    );
+
+    const encodedSignature = base64UrlEncode(
+        new Uint8Array(signature)
+    );
+
+    const proof =
+        `${signingInput}.${encodedSignature}`;
+
+    console.log(
+        '[CSB] Cryptographic proof berhasil dibuat.'
+    );
+
+    return {
+        header,
+        payload,
+        proof
+    };
+}
 
     window.CryptographicSessionBinding = {
         generateKeyPair,
@@ -406,6 +510,7 @@ function canonicalizeProof(proof) {
         getBindingId,
         testLocalSignature,
         signTestMessage,
-        verifyTestSignature
+        verifyTestSignature,
+        createCryptographicProof
     };
 })();
