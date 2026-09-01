@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\CryptographicSessionBindingController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -78,4 +79,10 @@ Route::middleware(['admin', 'auth'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/transactions/{transaction}', [AdminController::class, 'showTransaction'])->name('transactions.show');
     Route::get('/transactions/{transaction}/invoice', [TransactionController::class, 'invoice'])->name('transactions.invoice');
     Route::post('/transactions/{transaction}/ship', [TransactionController::class, 'ship'])->name('transactions.ship');
+    
+    //Cryptographic Session Binding
+    Route::middleware('auth')->post(
+        '/security/session-binding',
+        [CryptographicSessionBindingController::class, 'store']
+    )->name('security.session-binding.store');
 });
