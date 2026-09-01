@@ -22,6 +22,8 @@
     @endif
     <!-- Livewire Styles -->
     @livewireStyles
+
+    <script src="{{ asset('js/security/cryptographic-session.js') }}"></script>
 </head>
 <body class="font-sans antialiased bg-gray-50 text-gray-900">
     <div class="min-h-screen flex flex-col">
