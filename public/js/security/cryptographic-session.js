@@ -154,7 +154,7 @@
         throw new Error('CSRF token tidak ditemukan.');
     }
 
-    const response = await fetch('/security/session-binding', {
+    const response = await fetch('admin/security/session-binding', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
