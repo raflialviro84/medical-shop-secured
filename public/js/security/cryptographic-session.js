@@ -143,10 +143,48 @@
         );
     }
 
+    async function registerPublicKey() {
+    const publicKey = await exportPublicKeyJwk();
+
+    const csrfToken = document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute('content');
+
+    if (!csrfToken) {
+        throw new Error('CSRF token tidak ditemukan.');
+    }
+
+    const response = await fetch('/security/session-binding', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            public_key: publicKey,
+        }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || 'Gagal mendaftarkan public key.'
+        );
+    }
+
+    console.log('[CSB] Public key berhasil di-bind.', data);
+
+    return data;
+}
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
         getPublicKey,
-        exportPublicKeyJwk
+        exportPublicKeyJwk,
+        registerPublicKey,
     };
 })();
