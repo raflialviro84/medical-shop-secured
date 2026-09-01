@@ -33,6 +33,12 @@ Route::post('/logout', function () {
 // Authenticated user routes
 Route::middleware(['auth'])->group(function () {
 
+    Route::get('/security/test', function () {
+        return response()->json([
+            'message' => 'Cryptographic protected route berhasil diakses.',
+        ]);
+    })->middleware('cryptographic.session');
+
     // Cryptographic Session Binding
     Route::post(
         '/security/session-binding',

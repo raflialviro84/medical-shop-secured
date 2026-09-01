@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
+use App\Http\Middleware\VerifyCryptographicSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,8 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Register custom middleware aliases
         $middleware->alias([
             'admin' => AdminMiddleware::class,
-            'auth.custom' => AuthMiddleware::class, // Renamed to avoid conflict with Laravel's built-in auth middleware
-            'auth' => \Illuminate\Auth\Middleware\Authenticate::class, // Register Laravel's built-in auth middleware
+            'auth.custom' => AuthMiddleware::class,
+            'auth' => \Illuminate\Auth\Middleware\Authenticate::class,
+            'cryptographic.session' => VerifyCryptographicSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
