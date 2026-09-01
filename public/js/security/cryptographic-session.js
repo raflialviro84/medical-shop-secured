@@ -27,7 +27,7 @@
         });
     }
 
-    async function savePrivateKey(privateKey) {
+    async function saveKey(name, key) {
         const db = await openDatabase();
 
         return new Promise((resolve, reject) => {
@@ -38,10 +38,7 @@
 
             const store = transaction.objectStore(STORE_NAME);
 
-            const request = store.put(
-                privateKey,
-                'session-private-key'
-            );
+            const request = store.put(key, name);
 
             request.onsuccess = function () {
                 resolve();
@@ -53,7 +50,7 @@
         });
     }
 
-    async function getPrivateKey() {
+    async function getKey(name) {
         const db = await openDatabase();
 
         return new Promise((resolve, reject) => {
@@ -64,9 +61,7 @@
 
             const store = transaction.objectStore(STORE_NAME);
 
-            const request = store.get(
-                'session-private-key'
-            );
+            const request = store.get(name);
 
             request.onsuccess = function () {
                 resolve(request.result || null);
@@ -80,9 +75,7 @@
 
     async function generateKeyPair() {
         if (!window.crypto || !window.crypto.subtle) {
-            throw new Error(
-                'Web Crypto API tidak tersedia.'
-            );
+            throw new Error('Web Crypto API tidak tersedia.');
         }
 
         const keyPair = await window.crypto.subtle.generateKey(
@@ -94,7 +87,15 @@
             ['sign', 'verify']
         );
 
-        await savePrivateKey(keyPair.privateKey);
+        await saveKey(
+            'session-private-key',
+            keyPair.privateKey
+        );
+
+        await saveKey(
+            'session-public-key',
+            keyPair.publicKey
+        );
 
         console.log(
             '[CSB] ECDSA P-256 key pair berhasil dibuat.'
@@ -115,14 +116,37 @@
         });
 
         console.log(
-            '[CSB] Private Key berhasil disimpan ke IndexedDB.'
+            '[CSB] Key pair berhasil disimpan ke IndexedDB.'
         );
 
         return keyPair;
     }
 
+    async function getPrivateKey() {
+        return await getKey('session-private-key');
+    }
+
+    async function getPublicKey() {
+        return await getKey('session-public-key');
+    }
+
+    async function exportPublicKeyJwk() {
+        const publicKey = await getPublicKey();
+
+        if (!publicKey) {
+            throw new Error('Public key tidak ditemukan.');
+        }
+
+        return await window.crypto.subtle.exportKey(
+            'jwk',
+            publicKey
+        );
+    }
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
-        getPrivateKey
+        getPrivateKey,
+        getPublicKey,
+        exportPublicKeyJwk
     };
 })();
