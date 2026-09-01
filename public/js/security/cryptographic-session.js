@@ -180,11 +180,63 @@
     return data;
 }
 
+    async function signTestMessage(message = 'CSB_TEST_MESSAGE') {
+    const privateKey = await getPrivateKey();
+
+    if (!privateKey) {
+        throw new Error('Private key tidak ditemukan di IndexedDB.');
+    }
+
+    const data = new TextEncoder().encode(message);
+
+    const signature = await window.crypto.subtle.sign(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        privateKey,
+        data
+    );
+
+    console.log('[CSB] Message berhasil ditandatangani.');
+
+    return {
+        message,
+        signature
+    };
+}
+
+    async function verifyTestSignature(message, signature) {
+    const publicKey = await getPublicKey();
+
+    if (!publicKey) {
+        throw new Error('Public key tidak ditemukan di IndexedDB.');
+    }
+
+    const data = new TextEncoder().encode(message);
+
+    const valid = await window.crypto.subtle.verify(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        publicKey,
+        signature,
+        data
+    );
+
+    console.log('[CSB] Signature verification:', valid);
+
+    return valid;
+}
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
         getPublicKey,
         exportPublicKeyJwk,
         registerPublicKey,
+        signTestMessage,
+        verifyTestSignature
     };
 })();
