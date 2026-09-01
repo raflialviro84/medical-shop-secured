@@ -540,6 +540,67 @@ function generateJti() {
     return data;
 }
 
+    async function createRequestProof(method, url) {
+        const privateKey = await getPrivateKey();
+        const bindingId = await getBindingId();
+        const publicKeyJwk = await getPublicKeyJwk();
+
+        if (!privateKey) {
+            throw new Error(
+                'Private key tidak ditemukan.'
+            );
+        }
+
+        if (!bindingId) {
+            throw new Error(
+                'Binding ID tidak ditemukan.'
+            );
+        }
+
+        const header = {
+            typ: 'csb+jwt',
+            alg: 'ES256',
+            jwk: publicKeyJwk
+        };
+
+        const payload = {
+            jti: generateJti(),
+            iat: Math.floor(Date.now() / 1000),
+            htm: method.toUpperCase(),
+            htu: url,
+            binding_id: bindingId
+        };
+
+        const encodedHeader =
+            stringToBase64Url(JSON.stringify(header));
+
+        const encodedPayload =
+            stringToBase64Url(JSON.stringify(payload));
+
+        const signingInput =
+            `${encodedHeader}.${encodedPayload}`;
+
+        const signature =
+            await window.crypto.subtle.sign(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                privateKey,
+                new TextEncoder().encode(signingInput)
+            );
+
+        const encodedSignature =
+            base64UrlEncode(new Uint8Array(signature));
+
+        return {
+            header,
+            payload,
+            proof:
+                `${signingInput}.${encodedSignature}`
+        };
+    }
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
@@ -551,6 +612,7 @@ function generateJti() {
         signTestMessage,
         verifyTestSignature,
         createCryptographicProof,
-        sendCryptographicProof
+        sendCryptographicProof,
+        createRequestProof
     };
 })();

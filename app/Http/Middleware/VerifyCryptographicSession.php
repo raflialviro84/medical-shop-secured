@@ -18,6 +18,14 @@ class VerifyCryptographicSession
             ], 401);
         }
 
+        $proof = $request->header('DPoP');
+
+        if (!$proof) {
+            return response()->json([
+                'message' => 'Cryptographic proof is required.',
+            ], 403);
+        }
+
         return $next($request);
     }
 }
