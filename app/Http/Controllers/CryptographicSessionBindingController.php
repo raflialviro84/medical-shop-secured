@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\CryptographicSessionBinding;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\CryptographicProofReplay;
+use Illuminate\Support\Carbon;
 
 class CryptographicSessionBindingController extends Controller
 {
@@ -313,6 +315,26 @@ class CryptographicSessionBindingController extends Controller
             );
 
             if ($verificationResult === 1) {
+
+                $existingReplay = CryptographicProofReplay::query()
+                    ->where('jti', $payload['jti'])
+                    ->first();
+
+                if ($existingReplay) {
+                    return response()->json([
+                        'message' => 'Proof sudah pernah digunakan.',
+                        'proof_valid' => false,
+                    ], 403);
+                }
+
+                CryptographicProofReplay::create([
+                    'jti' => $payload['jti'],
+                    'binding_id' => $binding->id,
+                    'issued_at' => Carbon::createFromTimestamp($issuedAt),
+                    'expires_at' => Carbon::createFromTimestamp($issuedAt)
+                        ->addSeconds(60),
+                ]);
+
                 return response()->json([
                     'message' => 'Cryptographic proof valid.',
                     'proof_valid' => true,
