@@ -497,6 +497,49 @@ function generateJti() {
     };
 }
 
+    async function sendCryptographicProof() {
+    const result = await createCryptographicProof();
+
+    const csrfToken = document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute('content');
+
+    if (!csrfToken) {
+        throw new Error('CSRF token tidak ditemukan.');
+    }
+
+    const response = await fetch(
+        '/security/session-proof',
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                proof: result.proof,
+            }),
+        }
+    );
+
+    const data = await response.json();
+
+    console.log(
+        '[CSB] Server verification response:',
+        data
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || 'Cryptographic proof ditolak.'
+        );
+    }
+
+    return data;
+}
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
@@ -507,6 +550,7 @@ function generateJti() {
         testLocalSignature,
         signTestMessage,
         verifyTestSignature,
-        createCryptographicProof
+        createCryptographicProof,
+        sendCryptographicProof
     };
 })();

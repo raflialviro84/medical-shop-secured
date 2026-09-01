@@ -39,6 +39,11 @@ Route::middleware(['auth'])->group(function () {
         [CryptographicSessionBindingController::class, 'store']
     )->name('security.session-binding.store');
 
+    Route::post(
+        '/security/session-proof',
+        [CryptographicSessionBindingController::class, 'verify']
+    )->name('security.session-proof.verify');
+
     // Cart routes
     Route::view('/cart', 'cart.index')->name('cart.index');
 
