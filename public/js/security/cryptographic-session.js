@@ -230,6 +230,45 @@
     return valid;
 }
 
+    async function testLocalSignature() {
+    const privateKey = await getPrivateKey();
+    const publicKey = await getPublicKey();
+
+    if (!privateKey) {
+        throw new Error('Private key tidak ditemukan.');
+    }
+
+    if (!publicKey) {
+        throw new Error('Public key tidak ditemukan.');
+    }
+
+    const message = 'CSB_LOCAL_TEST';
+    const data = new TextEncoder().encode(message);
+
+    const signature = await window.crypto.subtle.sign(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        privateKey,
+        data
+    );
+
+    const valid = await window.crypto.subtle.verify(
+        {
+            name: 'ECDSA',
+            hash: 'SHA-256'
+        },
+        publicKey,
+        signature,
+        data
+    );
+
+    console.log('[CSB] Local key pair verification:', valid);
+
+    return valid;
+}
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
@@ -237,6 +276,7 @@
         exportPublicKeyJwk,
         registerPublicKey,
         signTestMessage,
-        verifyTestSignature
+        verifyTestSignature,
+        testLocalSignature
     };
 })();
