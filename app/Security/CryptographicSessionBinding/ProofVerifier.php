@@ -12,13 +12,32 @@ class ProofVerifier
     /**
      * Verifikasi cryptographic proof terhadap request Laravel saat ini.
      *
-     * Return:
+     * Untuk request biasa:
+     *
+     *     verify($request, $proof)
+     *
+     * maka method dan URI proof akan dibandingkan dengan request aktual.
+     *
+     * Untuk kebutuhan seperti navigation grant:
+     *
+     *     verify(
+     *         $request,
+     *         $proof,
+     *         'GET',
+     *         '/transactions'
+     *     )
+     *
+     * maka method dan URI proof akan dibandingkan dengan nilai
+     * expectedMethod dan expectedUri.
+     *
+     * Return sukses:
+     *
      * [
      *     'valid' => true,
      *     'binding_id' => ...
      * ]
      *
-     * atau:
+     * Return gagal:
      *
      * [
      *     'valid' => false,
@@ -28,7 +47,9 @@ class ProofVerifier
      */
     public function verify(
         Request $request,
-        string $proof
+        string $proof,
+        ?string $expectedMethod = null,
+        ?string $expectedUri = null
     ): array {
         /*
          * 1. Pecah proof menjadi:
@@ -71,6 +92,17 @@ class ProofVerifier
             return $this->invalid(
                 400,
                 'Invalid proof encoding.'
+            );
+        }
+
+        /*
+         * Pastikan header dan payload benar-benar object JSON
+         * yang berubah menjadi associative array.
+         */
+        if (!is_array($header) || !is_array($payload)) {
+            return $this->invalid(
+                400,
+                'Invalid proof JSON structure.'
             );
         }
 
@@ -121,7 +153,10 @@ class ProofVerifier
             }
         }
 
-        if (!is_string($payload['jti']) || $payload['jti'] === '') {
+        if (
+            !is_string($payload['jti']) ||
+            $payload['jti'] === ''
+        ) {
             return $this->invalid(
                 400,
                 'Invalid jti.'
@@ -132,6 +167,26 @@ class ProofVerifier
             return $this->invalid(
                 400,
                 'Invalid iat.'
+            );
+        }
+
+        if (
+            !is_string($payload['htm']) ||
+            $payload['htm'] === ''
+        ) {
+            return $this->invalid(
+                400,
+                'Invalid htm.'
+            );
+        }
+
+        if (
+            !is_string($payload['htu']) ||
+            $payload['htu'] === ''
+        ) {
+            return $this->invalid(
+                400,
+                'Invalid htu.'
             );
         }
 
@@ -162,12 +217,25 @@ class ProofVerifier
             );
         }
 
+        if (
+            !is_string($header['jwk']['x']) ||
+            !is_string($header['jwk']['y'])
+        ) {
+            return $this->invalid(
+                400,
+                'Invalid EC public key coordinates.'
+            );
+        }
+
         /*
          * 5. Cari binding berdasarkan:
          *
          * binding_id
          * current session
          * current authenticated user
+         *
+         * binding_id yang digunakan client adalah ID database
+         * CryptographicSessionBinding.
          */
         $binding = CryptographicSessionBinding::query()
             ->where('id', $payload['binding_id'])
@@ -196,6 +264,13 @@ class ProofVerifier
         $boundPublicKey = $binding->public_key;
         $proofPublicKey = $header['jwk'];
 
+        if (!is_array($boundPublicKey)) {
+            return $this->invalid(
+                500,
+                'Stored public key is invalid.'
+            );
+        }
+
         $sameKey =
             ($boundPublicKey['kty'] ?? null)
                 === ($proofPublicKey['kty'] ?? null)
@@ -217,27 +292,42 @@ class ProofVerifier
         }
 
         /*
-         * 7. Bind proof terhadap HTTP request aktual
+         * 7. Bind proof terhadap HTTP request.
          *
-         * Tidak lagi hardcode POST /security/session-proof.
+         * Mode normal:
+         *   expectedMethod = null
+         *   expectedUri    = null
+         *
+         * Maka gunakan request aktual.
+         *
+         * Mode navigation grant:
+         *   expectedMethod = 'GET'
+         *   expectedUri    = '/transactions'
+         *
+         * Maka proof wajib memang diterbitkan untuk
+         * GET /transactions.
          */
-        $expectedMethod = strtoupper($request->method());
-        $expectedUri = $request->getPathInfo();
+        $expectedMethod = strtoupper(
+            $expectedMethod ?? $request->method()
+        );
 
-        if (
-            strtoupper((string) $payload['htm'])
-            !== $expectedMethod
-        ) {
+        $expectedUri =
+            $expectedUri ?? $request->getPathInfo();
+
+        $proofMethod = strtoupper(
+            (string) $payload['htm']
+        );
+
+        $proofUri = (string) $payload['htu'];
+
+        if ($proofMethod !== $expectedMethod) {
             return $this->invalid(
                 403,
                 'Invalid HTTP method binding.'
             );
         }
 
-        if (
-            (string) $payload['htu']
-            !== $expectedUri
-        ) {
+        if ($proofUri !== $expectedUri) {
             return $this->invalid(
                 403,
                 'Invalid HTTP URI binding.'
@@ -246,6 +336,8 @@ class ProofVerifier
 
         /*
          * 8. Freshness / timestamp
+         *
+         * Proof hanya valid dalam window ±60 detik.
          */
         $currentTime = time();
         $issuedAt = (int) $payload['iat'];
@@ -268,6 +360,9 @@ class ProofVerifier
          *
          * r = 32 byte
          * s = 32 byte
+         *
+         * Web Crypto ECDSA menghasilkan signature
+         * dalam bentuk raw r || s.
          */
         if (strlen($signature) !== 64) {
             return $this->invalid(
@@ -303,6 +398,10 @@ class ProofVerifier
 
         /*
          * 11. Reconstruct exact signing input
+         *
+         * Signature dibuat terhadap:
+         *
+         * base64url(header) . "." . base64url(payload)
          */
         $signingInput =
             $encodedHeader . '.' . $encodedPayload;
@@ -311,11 +410,15 @@ class ProofVerifier
          * 12. Web Crypto raw signature
          *     r || s
          *
-         * → DER ECDSA signature
+         * →
+         *
+         * DER ECDSA signature
          */
         try {
             $derSignature =
-                $this->ecdsaRawSignatureToDer($signature);
+                $this->ecdsaRawSignatureToDer(
+                    $signature
+                );
         } catch (\Throwable) {
             return $this->invalid(
                 400,
@@ -337,7 +440,7 @@ class ProofVerifier
             /*
              * 14. Replay protection
              *
-             * Periksa apakah JTI sudah pernah dipakai.
+             * JTI hanya boleh digunakan satu kali.
              */
             $existingReplay = CryptographicProofReplay::query()
                 ->where('jti', $payload['jti'])
@@ -352,6 +455,10 @@ class ProofVerifier
 
             /*
              * Simpan JTI setelah signature valid.
+             *
+             * Unique constraint pada kolom jti di database
+             * menjadi perlindungan tambahan jika ada dua request
+             * concurrent yang membawa proof dengan JTI sama.
              */
             try {
                 CryptographicProofReplay::create([
@@ -365,10 +472,6 @@ class ProofVerifier
                     )->addSeconds($allowedClockSkew),
                 ]);
             } catch (\Throwable) {
-                /*
-                 * Unique constraint pada jti akan menjadi
-                 * perlindungan tambahan terhadap concurrent replay.
-                 */
                 return $this->invalid(
                     403,
                     'Proof sudah pernah digunakan.'
@@ -394,6 +497,9 @@ class ProofVerifier
         );
     }
 
+    /**
+     * Membuat response error standar.
+     */
     private function invalid(
         int $status,
         string $message
@@ -405,6 +511,9 @@ class ProofVerifier
         ];
     }
 
+    /**
+     * Base64URL decode tanpa padding wajib.
+     */
     private function base64UrlDecode(
         string $value
     ): string {
@@ -431,10 +540,18 @@ class ProofVerifier
         return $decoded;
     }
 
+    /**
+     * Konversi EC JWK P-256 menjadi PEM SubjectPublicKeyInfo.
+     */
     private function ecJwkToPem(array $jwk): string
     {
-        $x = $this->base64UrlDecode($jwk['x']);
-        $y = $this->base64UrlDecode($jwk['y']);
+        $x = $this->base64UrlDecode(
+            $jwk['x']
+        );
+
+        $y = $this->base64UrlDecode(
+            $jwk['y']
+        );
 
         if (
             strlen($x) !== 32 ||
@@ -447,6 +564,7 @@ class ProofVerifier
 
         /*
          * SubjectPublicKeyInfo:
+         *
          * id-ecPublicKey
          * prime256v1 / P-256
          */
@@ -454,6 +572,11 @@ class ProofVerifier
             '3059301306072A8648CE3D020106082A8648CE3D030107034200'
         );
 
+        /*
+         * EC uncompressed point:
+         *
+         * 04 || X || Y
+         */
         $der = $prefix
             . "\x04"
             . $x
@@ -469,6 +592,18 @@ class ProofVerifier
             . "-----END PUBLIC KEY-----\n";
     }
 
+    /**
+     * Konversi signature Web Crypto:
+     *
+     *     r || s
+     *
+     * menjadi DER ECDSA:
+     *
+     *     SEQUENCE {
+     *         INTEGER r
+     *         INTEGER s
+     *     }
+     */
     private function ecdsaRawSignatureToDer(
         string $rawSignature
     ): string {
@@ -478,12 +613,18 @@ class ProofVerifier
             );
         }
 
+        /*
+         * 32 byte pertama = r
+         */
         $r = substr(
             $rawSignature,
             0,
             32
         );
 
+        /*
+         * 32 byte berikutnya = s
+         */
         $s = substr(
             $rawSignature,
             32,
@@ -493,18 +634,26 @@ class ProofVerifier
         $encodeInteger = function (
             string $value
         ): string {
+            /*
+             * Buang leading zero.
+             */
             $value = ltrim(
                 $value,
                 "\x00"
             );
 
+            /*
+             * INTEGER kosong dianggap 0.
+             */
             if ($value === '') {
                 $value = "\x00";
             }
 
             /*
              * DER INTEGER bersifat signed.
-             * Tambahkan 00 jika bit tertinggi = 1.
+             *
+             * Jika bit tertinggi 1,
+             * tambahkan 00 agar tetap positif.
              */
             if (
                 (ord($value[0]) & 0x80) !== 0
@@ -531,8 +680,12 @@ class ProofVerifier
             . $sequence;
     }
 
-    private function derLength(int $length): string
-    {
+    /**
+     * Encode panjang data untuk DER.
+     */
+    private function derLength(
+        int $length
+    ): string {
         if ($length < 128) {
             return chr($length);
         }

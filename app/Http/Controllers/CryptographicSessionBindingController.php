@@ -6,6 +6,8 @@ use App\Models\CryptographicSessionBinding;
 use App\Security\CryptographicSessionBinding\ProofVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\CryptographicNavigationGrant;
+use Illuminate\Support\Str;
 
 class CryptographicSessionBindingController extends Controller
 {
@@ -77,36 +79,132 @@ class CryptographicSessionBindingController extends Controller
     }
 
     public function verify(Request $request): JsonResponse
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    if (!$user) {
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        $validated = $request->validate([
+            'proof' => ['required', 'string'],
+        ]);
+
+        $result = $this->proofVerifier->verify(
+            $request,
+            $validated['proof']
+        );
+
+        if (!$result['valid']) {
+            return response()->json([
+                'message' => $result['message'],
+                'proof_valid' => false,
+            ], $result['status']);
+        }
+
         return response()->json([
-            'message' => 'Unauthenticated.',
-        ], 401);
+            'message' => 'Cryptographic proof valid.',
+            'proof_valid' => true,
+            'binding_id' => $result['binding_id'],
+        ], 200);
     }
 
-    $validated = $request->validate([
-        'proof' => ['required', 'string'],
-    ]);
+    public function createNavigationGrant(Request $request): JsonResponse
+    {
+        $user = $request->user();
 
-    $result = $this->proofVerifier->verify(
-        $request,
-        $validated['proof']
-    );
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
 
-    if (!$result['valid']) {
+        $validated = $request->validate([
+            'proof' => ['required', 'string'],
+            'path' => ['required', 'string', 'max:2048'],
+        ]);
+
+        /*
+        * Untuk tahap penelitian ini, hanya resource tertentu
+        * yang boleh menggunakan navigation grant.
+        */
+        $allowedPaths = [
+            '/transactions',
+        ];
+
+        if (!in_array($validated['path'], $allowedPaths, true)) {
+            return response()->json([
+                'message' => 'Navigation target is not allowed.',
+            ], 403);
+        }
+
+        /*
+        * Proof harus benar-benar dibuat untuk:
+        *
+        * GET /transactions
+        *
+        * bukan untuk:
+        *
+        * POST /security/navigation-grant
+        */
+        $result = $this->proofVerifier->verify(
+            $request,
+            $validated['proof'],
+            'GET',
+            $validated['path']
+        );
+
+        if (!$result['valid']) {
+            return response()->json([
+                'message' => $result['message'],
+                'proof_valid' => false,
+            ], $result['status']);
+        }
+
+        /*
+        * Pastikan binding yang diverifikasi memang masih
+        * terikat pada session dan user saat ini.
+        */
+        $sessionId = $request->session()->getId();
+
+        $binding = CryptographicSessionBinding::query()
+            ->where('id', $result['binding_id'])
+            ->where('session_id', $sessionId)
+            ->where('user_id', $user->id)
+            ->whereNull('revoked_at')
+            ->first();
+
+        if (!$binding) {
+            return response()->json([
+                'message' => 'Session binding not found.',
+            ], 403);
+        }
+
+        /*
+        * Token asli hanya dikirim ke browser.
+        * Database hanya menyimpan hash token.
+        */
+        $plainToken = Str::random(64);
+
+        CryptographicNavigationGrant::create([
+            'token' => hash('sha256', $plainToken),
+            'user_id' => $user->id,
+            'session_id' => $sessionId,
+            'binding_id' => $binding->id,
+            'method' => 'GET',
+            'path' => $validated['path'],
+            'expires_at' => now()->addSeconds(10),
+            'used_at' => null,
+        ]);
+
         return response()->json([
-            'message' => $result['message'],
-            'proof_valid' => false,
-        ], $result['status']);
+            'message' => 'Navigation grant created.',
+            'url' => $validated['path']
+                . '?nav_token='
+                . urlencode($plainToken),
+        ]);
     }
-
-    return response()->json([
-        'message' => 'Cryptographic proof valid.',
-        'proof_valid' => true,
-        'binding_id' => $result['binding_id'],
-    ], 200);
-}
 
 }

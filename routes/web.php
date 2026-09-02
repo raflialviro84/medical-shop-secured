@@ -3,8 +3,6 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
-use Illuminate\Support\Carbon;
-
 use App\Models\Transaction;
 use App\Models\Product;
 use App\Models\User;
@@ -34,13 +32,18 @@ Route::get('/products/{product}', [ProductController::class, 'show'])
 Route::get('/search', [HomeController::class, 'search'])
     ->name('products.search');
 
+
+// ======================================================
+// Cryptographic Session Binding Status
+// ======================================================
+
 Route::get('/security/session-binding/status', function (Request $request) {
 
     /*
      * Guest / belum login.
      *
      * Endpoint status bukan protected resource,
-     * jadi guest tetap mendapat HTTP 200.
+     * sehingga guest tetap mendapat HTTP 200.
      */
     if (!$request->user()) {
         return response()->json([
@@ -50,6 +53,13 @@ Route::get('/security/session-binding/status', function (Request $request) {
         ], 200);
     }
 
+    /*
+     * Cari binding aktif berdasarkan:
+     *
+     * session_id
+     * user_id
+     * revoked_at = NULL
+     */
     $binding = CryptographicSessionBinding::query()
         ->where(
             'session_id',
@@ -82,20 +92,21 @@ Route::view('/register', 'auth.register')
     ->name('register');
 
 
-// ------------------------------------------------------
+// ======================================================
 // Logout
-// ------------------------------------------------------
+// ======================================================
 
 Route::post('/logout', function (Request $request) {
 
     /*
-     * Ambil session ID sebelum session di-invalidate.
+     * Ambil session ID sebelum session Laravel
+     * di-invalidate.
      */
     $sessionId = $request->session()->getId();
 
     /*
-     * Revoke cryptographic binding
-     * yang masih aktif pada session ini.
+     * Revoke cryptographic binding yang masih aktif
+     * pada session saat ini.
      */
     CryptographicSessionBinding::query()
         ->where('session_id', $sessionId)
@@ -115,7 +126,7 @@ Route::post('/logout', function (Request $request) {
     $request->session()->invalidate();
 
     /*
-     * Buat CSRF token baru.
+     * Regenerate CSRF token.
      */
     $request->session()->regenerateToken();
 
@@ -154,6 +165,7 @@ Route::middleware(['auth'])->group(function () {
         ]);
     });
 
+
     // --------------------------------------------------
     // POST cryptographic test
     // --------------------------------------------------
@@ -171,13 +183,44 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post(
         '/security/session-binding',
-        [CryptographicSessionBindingController::class, 'store']
+        [
+            CryptographicSessionBindingController::class,
+            'store'
+        ]
     )->name('security.session-binding.store');
+
 
     Route::post(
         '/security/session-proof',
-        [CryptographicSessionBindingController::class, 'verify']
+        [
+            CryptographicSessionBindingController::class,
+            'verify'
+        ]
     )->name('security.session-proof.verify');
+
+
+    // --------------------------------------------------
+    // Cryptographic Navigation Grant
+    // --------------------------------------------------
+    //
+    // Digunakan ketika browser melakukan navigasi GET
+    // menuju protected page seperti /transactions.
+    //
+    // Proof yang dikirim tetap harus dibuat untuk:
+    //
+    //     GET /transactions
+    //
+    // bukan:
+    //
+    //     POST /security/navigation-grant
+    //
+    Route::post(
+        '/security/navigation-grant',
+        [
+            CryptographicSessionBindingController::class,
+            'createNavigationGrant'
+        ]
+    )->name('security.navigation-grant');
 
 
     // --------------------------------------------------
@@ -222,33 +265,59 @@ Route::middleware(['auth'])->group(function () {
     // Transaction routes
     // --------------------------------------------------
 
+    /*
+     * Halaman transaksi TIDAK boleh diakses dengan
+     * GET biasa hanya bermodal session cookie.
+     *
+     * Protected resource ini menggunakan middleware:
+     *
+     *     auth
+     *     cryptographic.resource
+     *
+     * cryptographic.resource akan menerima salah satu:
+     *
+     * 1. DPoP proof untuk request biasa
+     * 2. One-time navigation grant untuk browser navigation
+     */
     Route::view('/transactions', 'transactions.index')
-        ->middleware('cryptographic.session')
+        ->middleware('cryptographic.resource')
         ->name('transactions.index');
 
-    Route::get('/transactions/{transaction}', function (Transaction $transaction) {
-        return view('transactions.show', compact('transaction'));
-    })->name('transactions.show');
+
+    Route::get(
+        '/transactions/{transaction}',
+        function (Transaction $transaction) {
+            return view(
+                'transactions.show',
+                compact('transaction')
+            );
+        }
+    )->name('transactions.show');
+
 
     Route::get(
         '/transactions/{transaction}/invoice',
         [TransactionController::class, 'invoice']
     )->name('transactions.invoice');
 
+
     Route::post(
         '/transactions',
         [TransactionController::class, 'checkout']
     )->name('transactions.store');
+
 
     Route::post(
         '/checkout',
         [TransactionController::class, 'checkout']
     )->name('checkout');
 
+
     Route::post(
         '/transactions/{transaction}/pay',
         [TransactionController::class, 'pay']
     )->name('transactions.pay');
+
 
     Route::post(
         '/transactions/{transaction}/done',
@@ -285,14 +354,23 @@ Route::middleware(['admin', 'auth'])
             'admin.users.index'
         )->name('users.index');
 
-        Route::get('/users/{user}/edit', function (User $user) {
-            return view('admin.users.edit', compact('user'));
-        })->name('users.edit');
+
+        Route::get(
+            '/users/{user}/edit',
+            function (User $user) {
+                return view(
+                    'admin.users.edit',
+                    compact('user')
+                );
+            }
+        )->name('users.edit');
+
 
         Route::put(
             '/users/{user}',
             [AdminController::class, 'updateUser']
         )->name('users.update');
+
 
         Route::delete(
             '/users/{user}',
@@ -309,24 +387,35 @@ Route::middleware(['admin', 'auth'])
             'admin.products.index'
         )->name('products.index');
 
+
         Route::get(
             '/products/create',
             fn () => view('admin.products.create')
         )->name('products.create');
+
 
         Route::post(
             '/products',
             [ProductController::class, 'store']
         )->name('products.store');
 
-        Route::get('/products/{product}/edit', function (Product $product) {
-            return view('admin.products.edit', compact('product'));
-        })->name('products.edit');
+
+        Route::get(
+            '/products/{product}/edit',
+            function (Product $product) {
+                return view(
+                    'admin.products.edit',
+                    compact('product')
+                );
+            }
+        )->name('products.edit');
+
 
         Route::put(
             '/products/{product}',
             [ProductController::class, 'update']
         )->name('products.update');
+
 
         Route::delete(
             '/products/{product}',
@@ -343,15 +432,18 @@ Route::middleware(['admin', 'auth'])
             [AdminController::class, 'transactions']
         )->name('transactions.index');
 
+
         Route::get(
             '/transactions/{transaction}',
             [AdminController::class, 'showTransaction']
         )->name('transactions.show');
 
+
         Route::get(
             '/transactions/{transaction}/invoice',
             [TransactionController::class, 'invoice']
         )->name('transactions.invoice');
+
 
         Route::post(
             '/transactions/{transaction}/ship',
