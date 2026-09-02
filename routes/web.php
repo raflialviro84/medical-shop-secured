@@ -39,6 +39,14 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->middleware('cryptographic.session');
 
+    Route::get('/security/baseline', function () {
+        return response()->json([
+            'authenticated' => auth()->check(),
+            'user_id' => auth()->id(),
+            'message' => 'Baseline protected by Laravel session only.',
+        ]);
+    })->middleware('auth');
+
     // Cryptographic Session Binding
     Route::post(
         '/security/session-binding',
