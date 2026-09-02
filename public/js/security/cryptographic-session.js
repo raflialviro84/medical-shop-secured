@@ -621,6 +621,31 @@ function generateJti() {
             proofResult.proof
         );
 
+        /*
+        * Laravel CSRF protection
+        *
+        * POST, PUT, PATCH, DELETE membutuhkan
+        * X-CSRF-TOKEN.
+        */
+        if (
+            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+        ) {
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute('content');
+
+            if (!csrfToken) {
+                throw new Error(
+                    'CSRF token tidak ditemukan.'
+                );
+            }
+
+            headers.set(
+                'X-CSRF-TOKEN',
+                csrfToken
+            );
+        }
+
         return fetch(url, {
             ...options,
             method,
