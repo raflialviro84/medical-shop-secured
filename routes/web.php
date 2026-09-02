@@ -1,15 +1,22 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
+
+use Illuminate\Support\Carbon;
+
 use App\Models\Transaction;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\CryptographicSessionBinding;
+
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CryptographicSessionBindingController;
+
 
 // ======================================================
 // Public routes
@@ -38,13 +45,46 @@ Route::view('/login', 'auth.login')
 Route::view('/register', 'auth.register')
     ->name('register');
 
-Route::post('/logout', function () {
+
+// ------------------------------------------------------
+// Logout
+// ------------------------------------------------------
+
+Route::post('/logout', function (Request $request) {
+
+    /*
+     * Ambil session ID sebelum session di-invalidate.
+     */
+    $sessionId = $request->session()->getId();
+
+    /*
+     * Revoke cryptographic binding
+     * yang masih aktif pada session ini.
+     */
+    CryptographicSessionBinding::query()
+        ->where('session_id', $sessionId)
+        ->whereNull('revoked_at')
+        ->update([
+            'revoked_at' => now(),
+        ]);
+
+    /*
+     * Logout user.
+     */
     auth()->logout();
 
-    request()->session()->invalidate();
-    request()->session()->regenerateToken();
+    /*
+     * Invalidasi session Laravel.
+     */
+    $request->session()->invalidate();
+
+    /*
+     * Buat CSRF token baru.
+     */
+    $request->session()->regenerateToken();
 
     return redirect('/');
+
 })->name('logout');
 
 
@@ -64,8 +104,12 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->middleware('cryptographic.session');
 
-    // Baseline:
-    // hanya menggunakan Laravel authentication/session
+
+    // --------------------------------------------------
+    // Baseline
+    // Hanya menggunakan Laravel authentication/session
+    // --------------------------------------------------
+
     Route::get('/security/baseline', function () {
         return response()->json([
             'authenticated' => auth()->check(),
@@ -74,12 +118,57 @@ Route::middleware(['auth'])->group(function () {
         ]);
     });
 
-    // POST test route
+
+    // --------------------------------------------------
+    // Cryptographic Session Binding Status
+    //
+    // Endpoint ini TIDAK menggunakan
+    // cryptographic.session karena digunakan untuk
+    // mengetahui apakah session sudah memiliki binding.
+    // --------------------------------------------------
+
+    Route::get('/security/session-binding/status', function (Request $request) {
+
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'authenticated' => false,
+                'bound' => false,
+                'binding_id' => null,
+            ], 401);
+        }
+
+        $binding = CryptographicSessionBinding::query()
+            ->where(
+                'session_id',
+                $request->session()->getId()
+            )
+            ->where(
+                'user_id',
+                $user->id
+            )
+            ->whereNull('revoked_at')
+            ->first();
+
+        return response()->json([
+            'authenticated' => true,
+            'bound' => $binding !== null,
+            'binding_id' => $binding?->id,
+        ]);
+    })->name('security.session-binding.status');
+
+
+    // --------------------------------------------------
+    // POST cryptographic test
+    // --------------------------------------------------
+
     Route::post('/security/test-post', function () {
         return response()->json([
             'message' => 'POST cryptographic route berhasil diakses.',
         ]);
     })->middleware('cryptographic.session');
+
 
     // --------------------------------------------------
     // Cryptographic Session Binding
@@ -138,8 +227,6 @@ Route::middleware(['auth'])->group(function () {
     // Transaction routes
     // --------------------------------------------------
 
-    // Route aplikasi nyata yang sekarang dilindungi
-    // oleh Cryptographic Session Binding
     Route::view('/transactions', 'transactions.index')
         ->middleware('cryptographic.session')
         ->name('transactions.index');
