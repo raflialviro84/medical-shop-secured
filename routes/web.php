@@ -34,6 +34,42 @@ Route::get('/products/{product}', [ProductController::class, 'show'])
 Route::get('/search', [HomeController::class, 'search'])
     ->name('products.search');
 
+Route::get('/security/session-binding/status', function (Request $request) {
+
+    /*
+     * Guest / belum login.
+     *
+     * Endpoint status bukan protected resource,
+     * jadi guest tetap mendapat HTTP 200.
+     */
+    if (!$request->user()) {
+        return response()->json([
+            'authenticated' => false,
+            'bound' => false,
+            'binding_id' => null,
+        ], 200);
+    }
+
+    $binding = CryptographicSessionBinding::query()
+        ->where(
+            'session_id',
+            $request->session()->getId()
+        )
+        ->where(
+            'user_id',
+            $request->user()->id
+        )
+        ->whereNull('revoked_at')
+        ->first();
+
+    return response()->json([
+        'authenticated' => true,
+        'bound' => $binding !== null,
+        'binding_id' => $binding?->id,
+    ], 200);
+
+})->name('security.session-binding.status');
+
 
 // ======================================================
 // Authentication routes
@@ -117,52 +153,6 @@ Route::middleware(['auth'])->group(function () {
             'message' => 'Baseline protected by Laravel session only.',
         ]);
     });
-
-
-    // --------------------------------------------------
-    // Cryptographic Session Binding Status
-    //
-    // Endpoint ini TIDAK menggunakan
-    // cryptographic.session karena digunakan untuk
-    // mengetahui apakah session sudah memiliki binding.
-    // --------------------------------------------------
-
-    Route::get('/security/session-binding/status', function (Request $request) {
-
-        /*
-        * Guest / belum login.
-        *
-        * Tetap return HTTP 200 karena endpoint ini hanya
-        * digunakan untuk mengetahui status CSB client.
-        */
-        if (!$request->user()) {
-            return response()->json([
-                'authenticated' => false,
-                'bound' => false,
-                'binding_id' => null,
-            ], 200);
-        }
-
-        $binding = CryptographicSessionBinding::query()
-            ->where(
-                'session_id',
-                $request->session()->getId()
-            )
-            ->where(
-                'user_id',
-                $request->user()->id
-            )
-            ->whereNull('revoked_at')
-            ->first();
-
-        return response()->json([
-            'authenticated' => true,
-            'bound' => $binding !== null,
-            'binding_id' => $binding?->id,
-        ], 200);
-
-    })->name('security.session-binding.status');
-
 
     // --------------------------------------------------
     // POST cryptographic test
