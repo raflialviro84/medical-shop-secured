@@ -704,82 +704,151 @@ function generateJti() {
     }
 
     async function initializeCryptographicSession() {
-        const status = await getCurrentBindingStatus();
-
-        /*
-        * CASE 1:
-        * Current Laravel session belum memiliki binding.
-        *
-        * Kemungkinan:
-        * - login baru
-        * - session baru
-        * - browser baru
-        */
-        if (!status.bound) {
-
-            await clearCryptographicState();
-
-            console.log(
-                '[CSB] Session belum memiliki binding.'
+        try {
+            const response = await fetch(
+                '/security/session-binding/status',
+                {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                }
             );
 
-            await generateKeyPair();
+            /*
+            * Guest / belum login.
+            * Tidak perlu membuat key.
+            */
+            if (response.status === 401) {
+                return null;
+            }
 
-            const result =
-                await registerPublicKey();
+            if (!response.ok) {
+                throw new Error(
+                    'Gagal memeriksa status cryptographic session.'
+                );
+            }
 
-            console.log(
-                '[CSB] Binding baru berhasil dibuat:',
-                result.binding_id
-            );
+            const status = await response.json();
 
-            return result;
-        }
+            if (!status.authenticated) {
+                return null;
+            }
 
-        /*
-        * CASE 2:
-        * Current session sudah memiliki binding.
-        */
+            /*
+            * ==================================================
+            * CASE 1
+            * Session authenticated tetapi belum memiliki
+            * cryptographic binding.
+            * ==================================================
+            */
+            if (!status.bound) {
 
-        const localBindingId =
-            await getBindingId();
+                console.log(
+                    '[CSB] Session belum memiliki binding. Membuat binding baru...'
+                );
 
-        /*
-        * Browser mempunyai binding yang sama.
-        * Artinya key pair cocok dengan session saat ini.
-        */
-        if (
-            localBindingId !== null &&
-            Number(localBindingId) === Number(status.binding_id)
-        ) {
+                /*
+                * Sangat penting:
+                * hapus state browser dari session sebelumnya.
+                */
+                await clearCryptographicState();
+
+                /*
+                * Buat key pair baru.
+                */
+                await generateKeyPair();
+
+                /*
+                * Daftarkan public key ke session Laravel.
+                */
+                const result = await registerPublicKey();
+
+                console.log(
+                    '[CSB] Automatic enrollment berhasil.',
+                    result
+                );
+
+                return {
+                    authenticated: true,
+                    bound: true,
+                    binding_id: result.binding_id,
+                    reused: false
+                };
+            }
+
+            /*
+            * ==================================================
+            * CASE 2
+            * Session sudah memiliki binding.
+            * ==================================================
+            */
+
+            const localBindingId =
+                await getBindingId();
+
             const privateKey =
                 await getPrivateKey();
 
-            if (privateKey) {
+            /*
+            * Browser memiliki key yang cocok
+            * dengan binding server.
+            */
+            if (
+                privateKey &&
+                localBindingId !== null &&
+                Number(localBindingId) === Number(status.binding_id)
+            ) {
                 console.log(
-                    '[CSB] Existing session binding masih valid:',
+                    '[CSB] Cryptographic session binding aktif:',
                     status.binding_id
                 );
 
                 return {
+                    authenticated: true,
+                    bound: true,
                     binding_id: status.binding_id,
                     reused: true
                 };
             }
-        }
 
-        /*
-        * CASE 3:
-        * Server memiliki binding,
-        * tetapi browser tidak memiliki key pair yang sesuai.
-        *
-        * Jangan diam-diam membuat key baru,
-        * karena server sudah mengikat session ini
-        * ke public key tertentu.
-        */
-        throw new Error(
-            'Session memiliki cryptographic binding, tetapi key pair lokal tidak sesuai.'
-        );
+            /*
+            * ==================================================
+            * CASE 3
+            * Server memiliki binding,
+            * tetapi key lokal hilang/tidak cocok.
+            *
+            * Jangan otomatis mengganti binding.
+            * Fail closed.
+            * ==================================================
+            */
+
+            console.error(
+                '[CSB] Local cryptographic key tidak sesuai dengan server binding.',
+                {
+                    serverBindingId: status.binding_id,
+                    localBindingId
+                }
+            );
+
+            return {
+                authenticated: true,
+                bound: true,
+                binding_id: status.binding_id,
+                reused: false,
+                keyMismatch: true
+            };
+
+        } catch (error) {
+
+            console.error(
+                '[CSB] Automatic initialization gagal:',
+                error
+            );
+
+            return null;
+        }
     }
 
     window.CryptographicSessionBinding = {
@@ -796,9 +865,67 @@ function generateJti() {
         sendCryptographicProof,
         createRequestProof,
         requestWithCryptographicProof,
-        deleteValue,
         clearCryptographicState,
         getCurrentBindingStatus,
         initializeCryptographicSession
     };
 })();
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!window.CryptographicSessionBinding) {
+        return;
+    }
+
+    await initializeCryptographicSession();
+});
+
+document.addEventListener('submit', async (event) => {
+    const form = event.target;
+
+    if (!(form instanceof HTMLFormElement)) {
+        return;
+    }
+
+    const action = form.getAttribute('action');
+
+    if (!action) {
+        return;
+    }
+
+    const url = new URL(
+        action,
+        window.location.origin
+    );
+
+    if (url.pathname !== '/logout') {
+        return;
+    }
+
+    /*
+     * Hentikan submit pertama.
+     */
+    event.preventDefault();
+
+    try {
+        /*
+         * Bersihkan key lokal terlebih dahulu.
+         */
+        await clearCryptographicState();
+
+        console.log(
+            '[CSB] Cryptographic state dibersihkan sebelum logout.'
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[CSB] Gagal membersihkan cryptographic state:',
+            error
+        );
+    }
+
+    /*
+     * Submit kembali setelah cleanup selesai.
+     */
+    form.submit();
+});
