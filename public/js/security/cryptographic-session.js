@@ -601,6 +601,34 @@ function generateJti() {
         };
     }
 
+    async function requestWithCryptographicProof(
+        url,
+        options = {}
+    ) {
+        const method = (
+            options.method || 'GET'
+        ).toUpperCase();
+
+        const proofResult =
+            await createRequestProof(method, url);
+
+        const headers = new Headers(
+            options.headers || {}
+        );
+
+        headers.set(
+            'DPoP',
+            proofResult.proof
+        );
+
+        return fetch(url, {
+            ...options,
+            method,
+            headers,
+            credentials: options.credentials || 'same-origin',
+        });
+    }
+
     window.CryptographicSessionBinding = {
         generateKeyPair,
         getPrivateKey,
@@ -613,6 +641,7 @@ function generateJti() {
         verifyTestSignature,
         createCryptographicProof,
         sendCryptographicProof,
-        createRequestProof
+        createRequestProof,
+        requestWithCryptographicProof
     };
 })();
