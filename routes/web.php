@@ -99,6 +99,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Transaction routes
     Route::view('/transactions', 'transactions.index')
+        ->middleware('cryptographic.session')
         ->name('transactions.index');
 
     Route::get('/transactions/{transaction}', function (Transaction $transaction) {
