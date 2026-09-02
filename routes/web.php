@@ -47,6 +47,12 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->middleware('auth');
 
+    Route::post('/security/test-post', function () {
+        return response()->json([
+            'message' => 'POST cryptographic route berhasil diakses.',
+        ]);
+    })->middleware('cryptographic.session');
+
     // Cryptographic Session Binding
     Route::post(
         '/security/session-binding',
