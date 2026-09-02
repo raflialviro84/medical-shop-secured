@@ -962,31 +962,16 @@
     // =====================================================
 
     async function getCurrentBindingStatus() {
-        const response =
-            await fetch(
-                STATUS_ENDPOINT,
-                {
-                    method: 'GET',
-
-                    credentials:
-                        'same-origin',
-
-                    headers: {
-                        'Accept':
-                            'application/json'
-                    }
+        const response = await fetch(
+            STATUS_ENDPOINT,
+            {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json'
                 }
-            );
-
-        if (
-            response.status === 401
-        ) {
-            return {
-                authenticated: false,
-                bound: false,
-                binding_id: null
-            };
-        }
+            }
+        );
 
         if (!response.ok) {
             throw new Error(

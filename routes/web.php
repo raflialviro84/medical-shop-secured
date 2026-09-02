@@ -129,14 +129,18 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/security/session-binding/status', function (Request $request) {
 
-        $user = $request->user();
-
-        if (!$user) {
+        /*
+        * Guest / belum login.
+        *
+        * Tetap return HTTP 200 karena endpoint ini hanya
+        * digunakan untuk mengetahui status CSB client.
+        */
+        if (!$request->user()) {
             return response()->json([
                 'authenticated' => false,
                 'bound' => false,
                 'binding_id' => null,
-            ], 401);
+            ], 200);
         }
 
         $binding = CryptographicSessionBinding::query()
@@ -146,7 +150,7 @@ Route::middleware(['auth'])->group(function () {
             )
             ->where(
                 'user_id',
-                $user->id
+                $request->user()->id
             )
             ->whereNull('revoked_at')
             ->first();
@@ -155,7 +159,8 @@ Route::middleware(['auth'])->group(function () {
             'authenticated' => true,
             'bound' => $binding !== null,
             'binding_id' => $binding?->id,
-        ]);
+        ], 200);
+
     })->name('security.session-binding.status');
 
 
