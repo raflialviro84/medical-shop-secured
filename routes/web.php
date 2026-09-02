@@ -11,15 +11,32 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CryptographicSessionBindingController;
 
+// ======================================================
 // Public routes
-Route::get('/', [HomeController::class, 'index'])->name('home');
-Route::get('/products', [ProductController::class, 'index'])->name('products.index');
-Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
-Route::get('/search', [HomeController::class, 'search'])->name('products.search');
+// ======================================================
 
+Route::get('/', [HomeController::class, 'index'])
+    ->name('home');
+
+Route::get('/products', [ProductController::class, 'index'])
+    ->name('products.index');
+
+Route::get('/products/{product}', [ProductController::class, 'show'])
+    ->name('products.show');
+
+Route::get('/search', [HomeController::class, 'search'])
+    ->name('products.search');
+
+
+// ======================================================
 // Authentication routes
-Route::view('/login', 'auth.login')->name('login');
-Route::view('/register', 'auth.register')->name('register');
+// ======================================================
+
+Route::view('/login', 'auth.login')
+    ->name('login');
+
+Route::view('/register', 'auth.register')
+    ->name('register');
 
 Route::post('/logout', function () {
     auth()->logout();
@@ -30,8 +47,16 @@ Route::post('/logout', function () {
     return redirect('/');
 })->name('logout');
 
+
+// ======================================================
 // Authenticated user routes
+// ======================================================
+
 Route::middleware(['auth'])->group(function () {
+
+    // --------------------------------------------------
+    // Cryptographic Session Binding - Test Routes
+    // --------------------------------------------------
 
     Route::get('/security/test', function () {
         return response()->json([
@@ -39,21 +64,27 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->middleware('cryptographic.session');
 
+    // Baseline:
+    // hanya menggunakan Laravel authentication/session
     Route::get('/security/baseline', function () {
         return response()->json([
             'authenticated' => auth()->check(),
             'user_id' => auth()->id(),
             'message' => 'Baseline protected by Laravel session only.',
         ]);
-    })->middleware('auth');
+    });
 
+    // POST test route
     Route::post('/security/test-post', function () {
         return response()->json([
             'message' => 'POST cryptographic route berhasil diakses.',
         ]);
     })->middleware('cryptographic.session');
 
+    // --------------------------------------------------
     // Cryptographic Session Binding
+    // --------------------------------------------------
+
     Route::post(
         '/security/session-binding',
         [CryptographicSessionBindingController::class, 'store']
@@ -64,8 +95,13 @@ Route::middleware(['auth'])->group(function () {
         [CryptographicSessionBindingController::class, 'verify']
     )->name('security.session-proof.verify');
 
+
+    // --------------------------------------------------
     // Cart routes
-    Route::view('/cart', 'cart.index')->name('cart.index');
+    // --------------------------------------------------
+
+    Route::view('/cart', 'cart.index')
+        ->name('cart.index');
 
     Route::post(
         '/cart/add/{product}',
@@ -97,7 +133,13 @@ Route::middleware(['auth'])->group(function () {
         [CartController::class, 'clear']
     )->name('cart.clear');
 
+
+    // --------------------------------------------------
     // Transaction routes
+    // --------------------------------------------------
+
+    // Route aplikasi nyata yang sekarang dilindungi
+    // oleh Cryptographic Session Binding
     Route::view('/transactions', 'transactions.index')
         ->middleware('cryptographic.session')
         ->name('transactions.index');
@@ -132,18 +174,30 @@ Route::middleware(['auth'])->group(function () {
     )->name('transactions.done');
 });
 
+
+// ======================================================
 // Admin routes
+// ======================================================
+
 Route::middleware(['admin', 'auth'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
+
+        // --------------------------------------------------
+        // Admin dashboard
+        // --------------------------------------------------
 
         Route::get(
             '/',
             [AdminController::class, 'dashboard']
         )->name('dashboard');
 
+
+        // --------------------------------------------------
         // Admin user management
+        // --------------------------------------------------
+
         Route::view(
             '/users',
             'admin.users.index'
@@ -163,7 +217,11 @@ Route::middleware(['admin', 'auth'])
             [AdminController::class, 'destroyUser']
         )->name('users.destroy');
 
+
+        // --------------------------------------------------
         // Admin product management
+        // --------------------------------------------------
+
         Route::view(
             '/products',
             'admin.products.index'
@@ -193,7 +251,11 @@ Route::middleware(['admin', 'auth'])
             [ProductController::class, 'destroy']
         )->name('products.destroy');
 
+
+        // --------------------------------------------------
         // Admin transaction management
+        // --------------------------------------------------
+
         Route::get(
             '/transactions',
             [AdminController::class, 'transactions']
