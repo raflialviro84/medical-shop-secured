@@ -1,18 +1,44 @@
 (function () {
     'use strict';
 
+    // =====================================================
+    // Configuration
+    // =====================================================
+
     const DB_NAME = 'medical-shop-security';
     const DB_VERSION = 1;
     const STORE_NAME = 'keys';
 
+    const PRIVATE_KEY_NAME = 'session-private-key';
+    const PUBLIC_KEY_NAME = 'session-public-key';
+    const BINDING_ID_NAME = 'binding-id';
+
+    const STATUS_ENDPOINT =
+        '/security/session-binding/status';
+
+    const BINDING_ENDPOINT =
+        '/security/session-binding';
+
+
+    // =====================================================
+    // IndexedDB
+    // =====================================================
+
     function openDatabase() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            const request = indexedDB.open(
+                DB_NAME,
+                DB_VERSION
+            );
 
             request.onupgradeneeded = function (event) {
                 const db = event.target.result;
 
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                if (
+                    !db.objectStoreNames.contains(
+                        STORE_NAME
+                    )
+                ) {
                     db.createObjectStore(STORE_NAME);
                 }
             };
@@ -27,6 +53,11 @@
         });
     }
 
+
+    // =====================================================
+    // IndexedDB - Save
+    // =====================================================
+
     async function saveKey(name, key) {
         const db = await openDatabase();
 
@@ -36,9 +67,13 @@
                 'readwrite'
             );
 
-            const store = transaction.objectStore(STORE_NAME);
+            const store =
+                transaction.objectStore(STORE_NAME);
 
-            const request = store.put(key, name);
+            const request = store.put(
+                key,
+                name
+            );
 
             request.onsuccess = function () {
                 resolve();
@@ -51,50 +86,62 @@
     }
 
     async function saveValue(name, value) {
-    const db = await openDatabase();
+        const db = await openDatabase();
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-            STORE_NAME,
-            'readwrite'
-        );
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(
+                STORE_NAME,
+                'readwrite'
+            );
 
-        const store = transaction.objectStore(STORE_NAME);
+            const store =
+                transaction.objectStore(STORE_NAME);
 
-        const request = store.put(value, name);
+            const request = store.put(
+                value,
+                name
+            );
 
-        request.onsuccess = function () {
-            resolve();
-        };
+            request.onsuccess = function () {
+                resolve();
+            };
 
-        request.onerror = function () {
-            reject(request.error);
-        };
-    });
-}
+            request.onerror = function () {
+                reject(request.error);
+            };
+        });
+    }
+
+
+    // =====================================================
+    // IndexedDB - Read
+    // =====================================================
 
     async function getValue(name) {
-    const db = await openDatabase();
+        const db = await openDatabase();
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(
-            STORE_NAME,
-            'readonly'
-        );
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(
+                STORE_NAME,
+                'readonly'
+            );
 
-        const store = transaction.objectStore(STORE_NAME);
+            const store =
+                transaction.objectStore(STORE_NAME);
 
-        const request = store.get(name);
+            const request = store.get(name);
 
-        request.onsuccess = function () {
-            resolve(request.result ?? null);
-        };
+            request.onsuccess = function () {
+                resolve(
+                    request.result ?? null
+                );
+            };
 
-        request.onerror = function () {
-            reject(request.error);
-        };
-    });
-}
+            request.onerror = function () {
+                reject(request.error);
+            };
+        });
+    }
 
     async function getKey(name) {
         const db = await openDatabase();
@@ -105,12 +152,15 @@
                 'readonly'
             );
 
-            const store = transaction.objectStore(STORE_NAME);
+            const store =
+                transaction.objectStore(STORE_NAME);
 
             const request = store.get(name);
 
             request.onsuccess = function () {
-                resolve(request.result || null);
+                resolve(
+                    request.result ?? null
+                );
             };
 
             request.onerror = function () {
@@ -119,27 +169,80 @@
         });
     }
 
+
+    // =====================================================
+    // IndexedDB - Delete
+    // =====================================================
+
+    async function deleteValue(name) {
+        const db = await openDatabase();
+
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(
+                STORE_NAME,
+                'readwrite'
+            );
+
+            const store =
+                transaction.objectStore(STORE_NAME);
+
+            const request = store.delete(name);
+
+            request.onsuccess = function () {
+                resolve();
+            };
+
+            request.onerror = function () {
+                reject(request.error);
+            };
+        });
+    }
+
+    async function clearCryptographicState() {
+        await deleteValue(PRIVATE_KEY_NAME);
+        await deleteValue(PUBLIC_KEY_NAME);
+        await deleteValue(BINDING_ID_NAME);
+
+        console.log(
+            '[CSB] Cryptographic session state berhasil dibersihkan.'
+        );
+    }
+
+
+    // =====================================================
+    // Key Pair Generation
+    // =====================================================
+
     async function generateKeyPair() {
-        if (!window.crypto || !window.crypto.subtle) {
-            throw new Error('Web Crypto API tidak tersedia.');
+        if (
+            !window.crypto ||
+            !window.crypto.subtle
+        ) {
+            throw new Error(
+                'Web Crypto API tidak tersedia.'
+            );
         }
 
-        const keyPair = await window.crypto.subtle.generateKey(
-            {
-                name: 'ECDSA',
-                namedCurve: 'P-256'
-            },
-            false,
-            ['sign', 'verify']
-        );
+        const keyPair =
+            await window.crypto.subtle.generateKey(
+                {
+                    name: 'ECDSA',
+                    namedCurve: 'P-256'
+                },
+                false,
+                [
+                    'sign',
+                    'verify'
+                ]
+            );
 
         await saveKey(
-            'session-private-key',
+            PRIVATE_KEY_NAME,
             keyPair.privateKey
         );
 
         await saveKey(
-            'session-public-key',
+            PUBLIC_KEY_NAME,
             keyPair.publicKey
         );
 
@@ -147,19 +250,31 @@
             '[CSB] ECDSA P-256 key pair berhasil dibuat.'
         );
 
-        console.log('[CSB] Public Key:', {
-            type: keyPair.publicKey.type,
-            algorithm: keyPair.publicKey.algorithm,
-            extractable: keyPair.publicKey.extractable,
-            usages: keyPair.publicKey.usages
-        });
+        console.log(
+            '[CSB] Public Key:',
+            {
+                type: keyPair.publicKey.type,
+                algorithm:
+                    keyPair.publicKey.algorithm,
+                extractable:
+                    keyPair.publicKey.extractable,
+                usages:
+                    keyPair.publicKey.usages
+            }
+        );
 
-        console.log('[CSB] Private Key:', {
-            type: keyPair.privateKey.type,
-            algorithm: keyPair.privateKey.algorithm,
-            extractable: keyPair.privateKey.extractable,
-            usages: keyPair.privateKey.usages
-        });
+        console.log(
+            '[CSB] Private Key:',
+            {
+                type: keyPair.privateKey.type,
+                algorithm:
+                    keyPair.privateKey.algorithm,
+                extractable:
+                    keyPair.privateKey.extractable,
+                usages:
+                    keyPair.privateKey.usages
+            }
+        );
 
         console.log(
             '[CSB] Key pair berhasil disimpan ke IndexedDB.'
@@ -168,19 +283,36 @@
         return keyPair;
     }
 
+
+    // =====================================================
+    // Key Access
+    // =====================================================
+
     async function getPrivateKey() {
-        return await getKey('session-private-key');
+        return await getKey(
+            PRIVATE_KEY_NAME
+        );
     }
 
     async function getPublicKey() {
-        return await getKey('session-public-key');
+        return await getKey(
+            PUBLIC_KEY_NAME
+        );
     }
 
+
+    // =====================================================
+    // Public Key → JWK
+    // =====================================================
+
     async function exportPublicKeyJwk() {
-        const publicKey = await getPublicKey();
+        const publicKey =
+            await getPublicKey();
 
         if (!publicKey) {
-            throw new Error('Public key tidak ditemukan.');
+            throw new Error(
+                'Public key tidak ditemukan.'
+            );
         }
 
         return await window.crypto.subtle.exportKey(
@@ -189,361 +321,309 @@
         );
     }
 
-    async function registerPublicKey() {
-    const publicKey = await exportPublicKeyJwk();
-
-    const csrfToken = document
-        .querySelector('meta[name="csrf-token"]')
-        ?.getAttribute('content');
-
-    if (!csrfToken) {
-        throw new Error('CSRF token tidak ditemukan.');
-    }
-
-    const response = await fetch('/security/session-binding', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-            public_key: publicKey,
-        }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            data.message || 'Gagal mendaftarkan public key.'
-        );
-    }
-
-    await saveValue(
-        'binding-id',
-        data.binding_id
-    );
-
-    console.log(
-        '[CSB] Public key berhasil di-bind.',
-        data
-    );
-
-    console.log(
-        '[CSB] Binding ID disimpan:',
-        data.binding_id
-    );
-
-    return data;
-}
-
     async function getPublicKeyJwk() {
-    return await exportPublicKeyJwk();
-}
+        return await exportPublicKeyJwk();
+    }
+
+
+    // =====================================================
+    // Binding ID
+    // =====================================================
 
     async function getBindingId() {
-    return await getValue('binding-id');
-}
-
-    async function signTestMessage(message = 'CSB_TEST_MESSAGE') {
-    const privateKey = await getPrivateKey();
-
-    if (!privateKey) {
-        throw new Error('Private key tidak ditemukan di IndexedDB.');
-    }
-
-    const data = new TextEncoder().encode(message);
-
-    const signature = await window.crypto.subtle.sign(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        privateKey,
-        data
-    );
-
-    console.log('[CSB] Message berhasil ditandatangani.');
-
-    return {
-        message,
-        signature
-    };
-}
-
-    async function verifyTestSignature(message, signature) {
-    const publicKey = await getPublicKey();
-
-    if (!publicKey) {
-        throw new Error('Public key tidak ditemukan di IndexedDB.');
-    }
-
-    const data = new TextEncoder().encode(message);
-
-    const valid = await window.crypto.subtle.verify(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        publicKey,
-        signature,
-        data
-    );
-
-    console.log('[CSB] Signature verification:', valid);
-
-    return valid;
-}
-
-    async function testLocalSignature() {
-    const privateKey = await getPrivateKey();
-    const publicKey = await getPublicKey();
-
-    if (!privateKey) {
-        throw new Error('Private key tidak ditemukan.');
-    }
-
-    if (!publicKey) {
-        throw new Error('Public key tidak ditemukan.');
-    }
-
-    const message = 'CSB_LOCAL_TEST';
-    const data = new TextEncoder().encode(message);
-
-    const signature = await window.crypto.subtle.sign(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        privateKey,
-        data
-    );
-
-    const valid = await window.crypto.subtle.verify(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        publicKey,
-        signature,
-        data
-    );
-
-    console.log('[CSB] Local key pair verification:', valid);
-
-    return valid;
-}
-
-    function generateJti() {
-    if (window.crypto.randomUUID) {
-        return window.crypto.randomUUID();
-    }
-
-    const bytes = new Uint8Array(16);
-    window.crypto.getRandomValues(bytes);
-
-    return Array.from(bytes)
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-function canonicalizeProof(proof) {
-    return [
-        proof.jti,
-        proof.iat,
-        proof.htm,
-        proof.htu,
-        proof.sid
-    ].join('\n');
-}
-
-    async function createSessionProof() {
-    const privateKey = await getPrivateKey();
-
-    if (!privateKey) {
-        throw new Error('Private key tidak ditemukan.');
-    }
-
-    const proof = {
-        jti: generateJti(),
-        iat: Math.floor(Date.now() / 1000),
-        htm: 'POST',
-        htu: '/security/session-proof',
-        sid: 'current-session-binding'
-    };
-
-    const canonical = canonicalizeProof(proof);
-
-    const data = new TextEncoder().encode(canonical);
-
-    const signature = await window.crypto.subtle.sign(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        privateKey,
-        data
-    );
-
-    const signatureBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(signature))
-    );
-
-    console.log('[CSB] Session proof berhasil dibuat.');
-
-    return {
-        ...proof,
-        signature: signatureBase64
-    };
-}
-
-    function base64UrlEncode(bytes) {
-    let binary = '';
-
-    for (const byte of bytes) {
-        binary += String.fromCharCode(byte);
-    }
-
-    return btoa(binary)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/g, '');
-}
-
-function stringToBase64Url(value) {
-    return base64UrlEncode(
-        new TextEncoder().encode(value)
-    );
-}
-
-function generateJti() {
-    if (window.crypto.randomUUID) {
-        return window.crypto.randomUUID();
-    }
-
-    const bytes = new Uint8Array(16);
-
-    window.crypto.getRandomValues(bytes);
-
-    return Array.from(bytes)
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-    async function createCryptographicProof() {
-    const privateKey = await getPrivateKey();
-    const bindingId = await getBindingId();
-    const publicKeyJwk = await getPublicKeyJwk();
-
-    if (!privateKey) {
-        throw new Error('Private key tidak ditemukan.');
-    }
-
-    if (!bindingId) {
-        throw new Error('Binding ID tidak ditemukan.');
-    }
-
-    const header = {
-        typ: 'csb+jwt',
-        alg: 'ES256',
-        jwk: publicKeyJwk
-    };
-
-    const payload = {
-        jti: generateJti(),
-        iat: Math.floor(Date.now() / 1000),
-        htm: 'POST',
-        htu: '/security/session-proof',
-        binding_id: bindingId
-    };
-
-    const encodedHeader = stringToBase64Url(
-        JSON.stringify(header)
-    );
-
-    const encodedPayload = stringToBase64Url(
-        JSON.stringify(payload)
-    );
-
-    const signingInput =
-        `${encodedHeader}.${encodedPayload}`;
-
-    const signature = await window.crypto.subtle.sign(
-        {
-            name: 'ECDSA',
-            hash: 'SHA-256'
-        },
-        privateKey,
-        new TextEncoder().encode(signingInput)
-    );
-
-    const encodedSignature = base64UrlEncode(
-        new Uint8Array(signature)
-    );
-
-    const proof =
-        `${signingInput}.${encodedSignature}`;
-
-    console.log(
-        '[CSB] Cryptographic proof berhasil dibuat.'
-    );
-
-    return {
-        header,
-        payload,
-        proof
-    };
-}
-
-    async function sendCryptographicProof() {
-    const result = await createCryptographicProof();
-
-    const csrfToken = document
-        .querySelector('meta[name="csrf-token"]')
-        ?.getAttribute('content');
-
-    if (!csrfToken) {
-        throw new Error('CSRF token tidak ditemukan.');
-    }
-
-    const response = await fetch(
-        '/security/session-proof',
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-                proof: result.proof,
-            }),
-        }
-    );
-
-    const data = await response.json();
-
-    console.log(
-        '[CSB] Server verification response:',
-        data
-    );
-
-    if (!response.ok) {
-        throw new Error(
-            data.message || 'Cryptographic proof ditolak.'
+        return await getValue(
+            BINDING_ID_NAME
         );
     }
 
-    return data;
-}
 
-    async function createRequestProof(method, url) {
-        const privateKey = await getPrivateKey();
-        const bindingId = await getBindingId();
-        const publicKeyJwk = await getPublicKeyJwk();
+    // =====================================================
+    // JTI
+    // =====================================================
+
+    function generateJti() {
+        if (
+            window.crypto &&
+            typeof window.crypto.randomUUID === 'function'
+        ) {
+            return window.crypto.randomUUID();
+        }
+
+        const bytes =
+            new Uint8Array(16);
+
+        window.crypto.getRandomValues(
+            bytes
+        );
+
+        return Array.from(bytes)
+            .map(
+                byte =>
+                    byte
+                        .toString(16)
+                        .padStart(2, '0')
+            )
+            .join('');
+    }
+
+
+    // =====================================================
+    // Base64URL
+    // =====================================================
+
+    function base64UrlEncode(bytes) {
+        let binary = '';
+
+        for (const byte of bytes) {
+            binary += String.fromCharCode(
+                byte
+            );
+        }
+
+        return btoa(binary)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/g, '');
+    }
+
+    function stringToBase64Url(value) {
+        return base64UrlEncode(
+            new TextEncoder().encode(value)
+        );
+    }
+
+
+    // =====================================================
+    // Register Public Key
+    // =====================================================
+
+    async function registerPublicKey() {
+        const publicKey =
+            await exportPublicKeyJwk();
+
+        const csrfToken =
+            document
+                .querySelector(
+                    'meta[name="csrf-token"]'
+                )
+                ?.getAttribute('content');
+
+        if (!csrfToken) {
+            throw new Error(
+                'CSRF token tidak ditemukan.'
+            );
+        }
+
+        const response = await fetch(
+            BINDING_ENDPOINT,
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type':
+                        'application/json',
+
+                    'Accept':
+                        'application/json',
+
+                    'X-CSRF-TOKEN':
+                        csrfToken
+                },
+
+                credentials: 'same-origin',
+
+                body: JSON.stringify({
+                    public_key: publicKey
+                })
+            }
+        );
+
+        let data;
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            throw new Error(
+                'Response register public key bukan JSON.'
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Gagal mendaftarkan public key.'
+            );
+        }
+
+        await saveValue(
+            BINDING_ID_NAME,
+            data.binding_id
+        );
+
+        console.log(
+            '[CSB] Public key berhasil di-bind.',
+            data
+        );
+
+        console.log(
+            '[CSB] Binding ID disimpan:',
+            data.binding_id
+        );
+
+        return data;
+    }
+
+
+    // =====================================================
+    // Local Signature Test
+    // =====================================================
+
+    async function signTestMessage(
+        message = 'CSB_TEST_MESSAGE'
+    ) {
+        const privateKey =
+            await getPrivateKey();
+
+        if (!privateKey) {
+            throw new Error(
+                'Private key tidak ditemukan di IndexedDB.'
+            );
+        }
+
+        const data =
+            new TextEncoder().encode(
+                message
+            );
+
+        const signature =
+            await window.crypto.subtle.sign(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                privateKey,
+                data
+            );
+
+        console.log(
+            '[CSB] Message berhasil ditandatangani.'
+        );
+
+        return {
+            message,
+            signature
+        };
+    }
+
+
+    async function verifyTestSignature(
+        message,
+        signature
+    ) {
+        const publicKey =
+            await getPublicKey();
+
+        if (!publicKey) {
+            throw new Error(
+                'Public key tidak ditemukan di IndexedDB.'
+            );
+        }
+
+        const data =
+            new TextEncoder().encode(
+                message
+            );
+
+        const valid =
+            await window.crypto.subtle.verify(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                publicKey,
+                signature,
+                data
+            );
+
+        console.log(
+            '[CSB] Signature verification:',
+            valid
+        );
+
+        return valid;
+    }
+
+
+    async function testLocalSignature() {
+        const privateKey =
+            await getPrivateKey();
+
+        const publicKey =
+            await getPublicKey();
+
+        if (!privateKey) {
+            throw new Error(
+                'Private key tidak ditemukan.'
+            );
+        }
+
+        if (!publicKey) {
+            throw new Error(
+                'Public key tidak ditemukan.'
+            );
+        }
+
+        const message =
+            'CSB_LOCAL_TEST';
+
+        const data =
+            new TextEncoder().encode(
+                message
+            );
+
+        const signature =
+            await window.crypto.subtle.sign(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                privateKey,
+                data
+            );
+
+        const valid =
+            await window.crypto.subtle.verify(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                publicKey,
+                signature,
+                data
+            );
+
+        console.log(
+            '[CSB] Local key pair verification:',
+            valid
+        );
+
+        return valid;
+    }
+
+
+    // =====================================================
+    // Cryptographic Proof
+    // =====================================================
+
+    async function createCryptographicProof() {
+        const privateKey =
+            await getPrivateKey();
+
+        const bindingId =
+            await getBindingId();
+
+        const publicKeyJwk =
+            await getPublicKeyJwk();
 
         if (!privateKey) {
             throw new Error(
@@ -565,17 +645,23 @@ function generateJti() {
 
         const payload = {
             jti: generateJti(),
-            iat: Math.floor(Date.now() / 1000),
-            htm: method.toUpperCase(),
-            htu: url,
+            iat: Math.floor(
+                Date.now() / 1000
+            ),
+            htm: 'POST',
+            htu: '/security/session-proof',
             binding_id: bindingId
         };
 
         const encodedHeader =
-            stringToBase64Url(JSON.stringify(header));
+            stringToBase64Url(
+                JSON.stringify(header)
+            );
 
         const encodedPayload =
-            stringToBase64Url(JSON.stringify(payload));
+            stringToBase64Url(
+                JSON.stringify(payload)
+            );
 
         const signingInput =
             `${encodedHeader}.${encodedPayload}`;
@@ -587,11 +673,192 @@ function generateJti() {
                     hash: 'SHA-256'
                 },
                 privateKey,
-                new TextEncoder().encode(signingInput)
+                new TextEncoder().encode(
+                    signingInput
+                )
             );
 
         const encodedSignature =
-            base64UrlEncode(new Uint8Array(signature));
+            base64UrlEncode(
+                new Uint8Array(signature)
+            );
+
+        const proof =
+            `${signingInput}.${encodedSignature}`;
+
+        console.log(
+            '[CSB] Cryptographic proof berhasil dibuat.'
+        );
+
+        return {
+            header,
+            payload,
+            proof
+        };
+    }
+
+
+    // =====================================================
+    // Send Cryptographic Proof
+    // =====================================================
+
+    async function sendCryptographicProof() {
+        const result =
+            await createCryptographicProof();
+
+        const csrfToken =
+            document
+                .querySelector(
+                    'meta[name="csrf-token"]'
+                )
+                ?.getAttribute('content');
+
+        if (!csrfToken) {
+            throw new Error(
+                'CSRF token tidak ditemukan.'
+            );
+        }
+
+        const response =
+            await fetch(
+                '/security/session-proof',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+
+                        'Accept':
+                            'application/json',
+
+                        'X-CSRF-TOKEN':
+                            csrfToken
+                    },
+
+                    credentials:
+                        'same-origin',
+
+                    body: JSON.stringify({
+                        proof: result.proof
+                    })
+                }
+            );
+
+        let data;
+
+        try {
+            data =
+                await response.json();
+        } catch (error) {
+            throw new Error(
+                'Response server bukan JSON.'
+            );
+        }
+
+        console.log(
+            '[CSB] Server verification response:',
+            data
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Cryptographic proof ditolak.'
+            );
+        }
+
+        return data;
+    }
+
+
+    // =====================================================
+    // Generic Request Proof
+    // =====================================================
+
+    async function createRequestProof(
+        method,
+        url
+    ) {
+        const privateKey =
+            await getPrivateKey();
+
+        const bindingId =
+            await getBindingId();
+
+        const publicKeyJwk =
+            await getPublicKeyJwk();
+
+        if (!privateKey) {
+            throw new Error(
+                'Private key tidak ditemukan.'
+            );
+        }
+
+        if (!bindingId) {
+            throw new Error(
+                'Binding ID tidak ditemukan.'
+            );
+        }
+
+        const normalizedMethod =
+            String(method).toUpperCase();
+
+        const normalizedUrl =
+            new URL(
+                url,
+                window.location.origin
+            ).pathname;
+
+        const header = {
+            typ: 'csb+jwt',
+            alg: 'ES256',
+            jwk: publicKeyJwk
+        };
+
+        const payload = {
+            jti: generateJti(),
+
+            iat: Math.floor(
+                Date.now() / 1000
+            ),
+
+            htm: normalizedMethod,
+
+            htu: normalizedUrl,
+
+            binding_id: bindingId
+        };
+
+        const encodedHeader =
+            stringToBase64Url(
+                JSON.stringify(header)
+            );
+
+        const encodedPayload =
+            stringToBase64Url(
+                JSON.stringify(payload)
+            );
+
+        const signingInput =
+            `${encodedHeader}.${encodedPayload}`;
+
+        const signature =
+            await window.crypto.subtle.sign(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                privateKey,
+                new TextEncoder().encode(
+                    signingInput
+                )
+            );
+
+        const encodedSignature =
+            base64UrlEncode(
+                new Uint8Array(signature)
+            );
 
         return {
             header,
@@ -601,6 +868,11 @@ function generateJti() {
         };
     }
 
+
+    // =====================================================
+    // Request With Cryptographic Proof
+    // =====================================================
+
     async function requestWithCryptographicProof(
         url,
         options = {}
@@ -609,12 +881,25 @@ function generateJti() {
             options.method || 'GET'
         ).toUpperCase();
 
-        const proofResult =
-            await createRequestProof(method, url);
+        const absoluteUrl =
+            new URL(
+                url,
+                window.location.origin
+            );
 
-        const headers = new Headers(
-            options.headers || {}
-        );
+        const requestUrl =
+            absoluteUrl.pathname;
+
+        const proofResult =
+            await createRequestProof(
+                method,
+                requestUrl
+            );
+
+        const headers =
+            new Headers(
+                options.headers || {}
+            );
 
         headers.set(
             'DPoP',
@@ -622,17 +907,25 @@ function generateJti() {
         );
 
         /*
-        * Laravel CSRF protection
-        *
-        * POST, PUT, PATCH, DELETE membutuhkan
-        * X-CSRF-TOKEN.
-        */
+         * Laravel CSRF protection.
+         *
+         * POST, PUT, PATCH, DELETE
+         * membutuhkan X-CSRF-TOKEN.
+         */
         if (
-            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+            [
+                'POST',
+                'PUT',
+                'PATCH',
+                'DELETE'
+            ].includes(method)
         ) {
-            const csrfToken = document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content');
+            const csrfToken =
+                document
+                    .querySelector(
+                        'meta[name="csrf-token"]'
+                    )
+                    ?.getAttribute('content');
 
             if (!csrfToken) {
                 throw new Error(
@@ -646,53 +939,54 @@ function generateJti() {
             );
         }
 
-        return fetch(url, {
-            ...options,
-            method,
-            headers,
-            credentials: options.credentials || 'same-origin',
-        });
-    }
-
-    async function deleteValue(name) {
-        const db = await openDatabase();
-
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(
-                STORE_NAME,
-                'readwrite'
-            );
-
-            const store = transaction.objectStore(STORE_NAME);
-
-            const request = store.delete(name);
-
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async function clearCryptographicState() {
-        await deleteValue('session-private-key');
-        await deleteValue('session-public-key');
-        await deleteValue('binding-id');
-
-        console.log(
-            '[CSB] Cryptographic session state berhasil dibersihkan.'
-        );
-    }
-
-    async function getCurrentBindingStatus() {
-        const response = await fetch(
-            '/security/session-binding/status',
+        return fetch(
+            absoluteUrl.pathname +
+            absoluteUrl.search,
             {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json'
-                }
+                ...options,
+
+                method,
+
+                headers,
+
+                credentials:
+                    options.credentials ||
+                    'same-origin'
             }
         );
+    }
+
+
+    // =====================================================
+    // Current Binding Status
+    // =====================================================
+
+    async function getCurrentBindingStatus() {
+        const response =
+            await fetch(
+                STATUS_ENDPOINT,
+                {
+                    method: 'GET',
+
+                    credentials:
+                        'same-origin',
+
+                    headers: {
+                        'Accept':
+                            'application/json'
+                    }
+                }
+            );
+
+        if (
+            response.status === 401
+        ) {
+            return {
+                authenticated: false,
+                bound: false,
+                binding_id: null
+            };
+        }
 
         if (!response.ok) {
             throw new Error(
@@ -703,46 +997,41 @@ function generateJti() {
         return await response.json();
     }
 
+
+    // =====================================================
+    // Initialize Cryptographic Session
+    // =====================================================
+
     async function initializeCryptographicSession() {
         try {
-            const response = await fetch(
-                '/security/session-binding/status',
-                {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                }
-            );
+            const status =
+                await getCurrentBindingStatus();
 
             /*
-            * Guest / belum login.
-            * Tidak perlu membuat key.
-            */
-            if (response.status === 401) {
+             * -------------------------------------------------
+             * Guest
+             * -------------------------------------------------
+             */
+            if (
+                !status.authenticated
+            ) {
                 return null;
             }
 
-            if (!response.ok) {
-                throw new Error(
-                    'Gagal memeriksa status cryptographic session.'
-                );
-            }
-
-            const status = await response.json();
-
-            if (!status.authenticated) {
-                return null;
-            }
 
             /*
-            * ==================================================
-            * CASE 1
-            * Session authenticated tetapi belum memiliki
-            * cryptographic binding.
-            * ==================================================
-            */
+             * -------------------------------------------------
+             * CASE 1
+             *
+             * Session authenticated,
+             * tetapi server belum memiliki binding.
+             *
+             * Ini biasanya terjadi setelah:
+             * - login baru
+             * - session baru
+             * - session rotation
+             * -------------------------------------------------
+             */
             if (!status.bound) {
 
                 console.log(
@@ -750,20 +1039,21 @@ function generateJti() {
                 );
 
                 /*
-                * Sangat penting:
-                * hapus state browser dari session sebelumnya.
-                */
+                 * State browser dari session sebelumnya
+                 * harus dibersihkan.
+                 */
                 await clearCryptographicState();
 
                 /*
-                * Buat key pair baru.
-                */
+                 * Generate key pair baru.
+                 */
                 await generateKeyPair();
 
                 /*
-                * Daftarkan public key ke session Laravel.
-                */
-                const result = await registerPublicKey();
+                 * Register public key baru.
+                 */
+                const result =
+                    await registerPublicKey();
 
                 console.log(
                     '[CSB] Automatic enrollment berhasil.',
@@ -773,17 +1063,23 @@ function generateJti() {
                 return {
                     authenticated: true,
                     bound: true,
-                    binding_id: result.binding_id,
+                    binding_id:
+                        result.binding_id,
                     reused: false
                 };
             }
 
+
             /*
-            * ==================================================
-            * CASE 2
-            * Session sudah memiliki binding.
-            * ==================================================
-            */
+             * -------------------------------------------------
+             * CASE 2
+             *
+             * Server sudah memiliki binding.
+             *
+             * Periksa apakah browser mempunyai
+             * binding ID dan private key yang sesuai.
+             * -------------------------------------------------
+             */
 
             const localBindingId =
                 await getBindingId();
@@ -791,15 +1087,13 @@ function generateJti() {
             const privateKey =
                 await getPrivateKey();
 
-            /*
-            * Browser memiliki key yang cocok
-            * dengan binding server.
-            */
             if (
                 privateKey &&
                 localBindingId !== null &&
-                Number(localBindingId) === Number(status.binding_id)
+                Number(localBindingId) ===
+                    Number(status.binding_id)
             ) {
+
                 console.log(
                     '[CSB] Cryptographic session binding aktif:',
                     status.binding_id
@@ -808,26 +1102,33 @@ function generateJti() {
                 return {
                     authenticated: true,
                     bound: true,
-                    binding_id: status.binding_id,
+                    binding_id:
+                        status.binding_id,
                     reused: true
                 };
             }
 
+
             /*
-            * ==================================================
-            * CASE 3
-            * Server memiliki binding,
-            * tetapi key lokal hilang/tidak cocok.
-            *
-            * Jangan otomatis mengganti binding.
-            * Fail closed.
-            * ==================================================
-            */
+             * -------------------------------------------------
+             * CASE 3
+             *
+             * Server memiliki binding,
+             * tetapi browser tidak mempunyai key
+             * yang sesuai.
+             *
+             * JANGAN membuat key baru.
+             *
+             * Fail closed.
+             * -------------------------------------------------
+             */
 
             console.error(
                 '[CSB] Local cryptographic key tidak sesuai dengan server binding.',
                 {
-                    serverBindingId: status.binding_id,
+                    serverBindingId:
+                        status.binding_id,
+
                     localBindingId
                 }
             );
@@ -835,7 +1136,8 @@ function generateJti() {
             return {
                 authenticated: true,
                 bound: true,
-                binding_id: status.binding_id,
+                binding_id:
+                    status.binding_id,
                 reused: false,
                 keyMismatch: true
             };
@@ -851,81 +1153,136 @@ function generateJti() {
         }
     }
 
+
+    // =====================================================
+    // Expose Public API
+    // =====================================================
+
     window.CryptographicSessionBinding = {
+
         generateKeyPair,
+
         getPrivateKey,
+
         getPublicKey,
+
         exportPublicKeyJwk,
+
+        getPublicKeyJwk,
+
         registerPublicKey,
+
         getBindingId,
-        testLocalSignature,
+
         signTestMessage,
+
         verifyTestSignature,
+
+        testLocalSignature,
+
         createCryptographicProof,
+
         sendCryptographicProof,
+
         createRequestProof,
+
         requestWithCryptographicProof,
+
+        deleteValue,
+
         clearCryptographicState,
+
         getCurrentBindingStatus,
+
         initializeCryptographicSession
     };
-})();
 
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!window.CryptographicSessionBinding) {
-        return;
-    }
 
-    await initializeCryptographicSession();
-});
+    // =====================================================
+    // Automatic Initialization
+    // =====================================================
 
-document.addEventListener('submit', async (event) => {
-    const form = event.target;
-
-    if (!(form instanceof HTMLFormElement)) {
-        return;
-    }
-
-    const action = form.getAttribute('action');
-
-    if (!action) {
-        return;
-    }
-
-    const url = new URL(
-        action,
-        window.location.origin
+    document.addEventListener(
+        'DOMContentLoaded',
+        async () => {
+            try {
+                await initializeCryptographicSession();
+            } catch (error) {
+                console.error(
+                    '[CSB] Automatic initialization gagal:',
+                    error
+                );
+            }
+        }
     );
 
-    if (url.pathname !== '/logout') {
-        return;
-    }
 
-    /*
-     * Hentikan submit pertama.
-     */
-    event.preventDefault();
+    // =====================================================
+    // Automatic Logout Cleanup
+    // =====================================================
 
-    try {
-        /*
-         * Bersihkan key lokal terlebih dahulu.
-         */
-        await clearCryptographicState();
+    document.addEventListener(
+        'submit',
+        async (event) => {
 
-        console.log(
-            '[CSB] Cryptographic state dibersihkan sebelum logout.'
-        );
+            const form =
+                event.target;
 
-    } catch (error) {
+            if (
+                !(form instanceof HTMLFormElement)
+            ) {
+                return;
+            }
 
-        console.error(
-            '[CSB] Gagal membersihkan cryptographic state:',
-            error
-        );
-    }
+            const action =
+                form.getAttribute('action');
 
-    /*
-     * Submit kembali setelah cleanup selesai.
-     */
-    form.submit();
-});
+            if (!action) {
+                return;
+            }
+
+            const url =
+                new URL(
+                    action,
+                    window.location.origin
+                );
+
+            if (
+                url.pathname !== '/logout'
+            ) {
+                return;
+            }
+
+            /*
+             * Hentikan submit pertama
+             * sampai local state selesai dibersihkan.
+             */
+            event.preventDefault();
+
+            try {
+
+                await clearCryptographicState();
+
+                console.log(
+                    '[CSB] Cryptographic state dibersihkan sebelum logout.'
+                );
+
+            } catch (error) {
+
+                console.error(
+                    '[CSB] Gagal membersihkan cryptographic state:',
+                    error
+                );
+            }
+
+            /*
+             * Submit ulang.
+             *
+             * form.submit() tidak memicu
+             * event submit lagi.
+             */
+            form.submit();
+        }
+    );
+
+})();
