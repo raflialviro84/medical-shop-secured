@@ -15,6 +15,7 @@ class CryptographicProofReplay extends Model
     ];
 
     protected $casts = [
+        'binding_id' => 'integer',
         'issued_at' => 'datetime',
         'expires_at' => 'datetime',
     ];

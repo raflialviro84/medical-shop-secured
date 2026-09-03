@@ -3,32 +3,32 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
 use App\Http\Middleware\VerifyCryptographicSession;
-use App\Http\Middleware\VerifyCryptographicResource;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
+        web: __DIR__ . '/../routes/web.php',
+        commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Use Laravel's built-in auth middleware for authentication
-        // This ensures that both route middleware and Blade @auth directives work correctl
-        
+
         // Register custom middleware aliases
         $middleware->alias([
             'admin' => AdminMiddleware::class,
+
             'auth.custom' => AuthMiddleware::class,
+
             'auth' => \Illuminate\Auth\Middleware\Authenticate::class,
 
-            'cryptographic.session' => VerifyCryptographicSession::class,
-            'cryptographic.navigation' => VerifyCryptographicNavigationGrant::class,
-            'cryptographic.resource' => VerifyCryptographicResource::class,
+            'cryptographic.session' =>
+                VerifyCryptographicSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create();

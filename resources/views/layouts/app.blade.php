@@ -10,15 +10,27 @@
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
 
-    <!-- Scripts / Styles: use Vite when build exists, otherwise fallback to CDN + local assets (no npm required) -->
-    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <!-- Scripts / Styles -->
+    @if (
+        file_exists(public_path('build/manifest.json')) ||
+        file_exists(public_path('hot'))
+    )
+        @vite([
+            'resources/css/app.css',
+            'resources/js/app.js'
+        ])
     @else
         <script src="https://cdn.tailwindcss.com"></script>
-        <link href="{{ asset('css/app.css') }}" rel="stylesheet">
+        <link
+            href="{{ asset('css/app.css') }}"
+            rel="stylesheet"
+        >
     @endif
 
     <!-- Livewire Styles -->
@@ -73,7 +85,6 @@
                         </div>
                     </div>
 
-
                     <!-- Search -->
                     <div class="flex-1 flex items-center justify-center px-2 lg:ml-6 lg:justify-end">
 
@@ -82,13 +93,17 @@
                             method="GET"
                             class="max-w-lg w-full lg:max-w-xs"
                         >
-                            <label for="search" class="sr-only">
+                            <label
+                                for="search"
+                                class="sr-only"
+                            >
                                 Search
                             </label>
 
                             <div class="relative">
 
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+
                                     <svg
                                         class="h-5 w-5 text-gray-400"
                                         xmlns="http://www.w3.org/2000/svg"
@@ -102,6 +117,7 @@
                                             clip-rule="evenodd"
                                         />
                                     </svg>
+
                                 </div>
 
                                 <input
@@ -117,7 +133,6 @@
                         </form>
 
                     </div>
-
 
                     <!-- Right Navigation -->
                     <div class="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
@@ -144,14 +159,13 @@
                                         stroke-linecap="round"
                                         stroke-linejoin="round"
                                         stroke-width="2"
-                                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 00-2-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
                                     />
                                 </svg>
 
                                 <livewire:cart-counter />
 
                             </a>
-
 
                             <!-- User Dropdown -->
                             <div
@@ -186,7 +200,6 @@
 
                                 </div>
 
-
                                 <div
                                     x-show="open"
                                     @click.away="open = false"
@@ -199,6 +212,7 @@
 
                                     @if(Auth::user()->isAdmin())
 
+                                        <!-- Admin Dashboard -->
                                         <a
                                             href="{{ route('admin.dashboard') }}"
                                             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -209,17 +223,14 @@
 
                                     @endif
 
-
                                     <!-- My Transactions -->
                                     <a
                                         href="{{ route('transactions.index') }}"
-                                        data-cryptographic-navigation
                                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                         role="menuitem"
                                     >
                                         My Transactions
                                     </a>
-
 
                                     <!-- Logout -->
                                     <form
@@ -317,7 +328,6 @@
 
             </div>
 
-
             <!-- Mobile menu -->
             <div
                 x-data="{ open: false }"
@@ -335,7 +345,6 @@
                         Home
                     </a>
 
-
                     <!-- Products -->
                     <a
                         href="{{ route('products.index') }}"
@@ -343,7 +352,6 @@
                     >
                         Products
                     </a>
-
 
                     @auth
 
@@ -355,16 +363,13 @@
                             Cart
                         </a>
 
-
                         <!-- My Transactions -->
                         <a
                             href="{{ route('transactions.index') }}"
-                            data-cryptographic-navigation
                             class="block pl-3 pr-4 py-2 border-l-4 {{ request()->routeIs('transactions.*') ? 'border-indigo-500 text-indigo-700 bg-indigo-50' : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800' }} text-base font-medium"
                         >
                             My Transactions
                         </a>
-
 
                         @if(Auth::user()->isAdmin())
 
@@ -377,7 +382,6 @@
                             </a>
 
                         @endif
-
 
                         <!-- Logout -->
                         <form
@@ -405,7 +409,6 @@
                             Log in
                         </a>
 
-
                         <!-- Register -->
                         <a
                             href="{{ route('register') }}"
@@ -419,7 +422,6 @@
                 </div>
 
             </div>
-
         </nav>
 
 
@@ -499,7 +501,7 @@
                             >
                                 <path
                                     fill-rule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 101.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293l1.414-1.414L10 8.586l1.293-1.293 1.414 1.414L11.414 10l1.293 1.293-1.414 1.414L10 11.414l-1.293 1.293-1.414-1.414L8.586 10 7.293 8.707z"
                                     clip-rule="evenodd"
                                 />
                             </svg>
@@ -529,9 +531,7 @@
             <div class="py-6">
 
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
                     @yield('content')
-
                 </div>
 
             </div>
@@ -571,7 +571,6 @@
                             </svg>
                         </a>
 
-
                         <!-- Instagram -->
                         <a
                             href="#"
@@ -589,12 +588,11 @@
                             >
                                 <path
                                     fill-rule="evenodd"
-                                    d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-.465 1.363-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-.975.207-1.504.344-1.857.182-.467.398-.8.748-1.15.35-.35.683-.566 1.15-.748.353-.137.882-.3 1.857-.344 1.023-.047 1.351-.058 3.807-.058h.468zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"
+                                    d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-.465 1.363-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.465-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-.975.207-1.504.344-1.857.182-.467.398-.8.748-1.15.35-.35.683-.566 1.15-.748.353-.137.882-.3 1.857-.344 1.023-.047 1.351-.058 3.807-.058h.468zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"
                                     clip-rule="evenodd"
                                 />
                             </svg>
                         </a>
-
 
                         <!-- Twitter -->
                         <a
@@ -612,13 +610,12 @@
                                 aria-hidden="true"
                             >
                                 <path
-                                    d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 01-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"
+                                    d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"
                                 />
                             </svg>
                         </a>
 
                     </div>
-
 
                     <div class="mt-8 md:mt-0 md:order-1">
 
@@ -643,7 +640,7 @@
     <!-- Livewire Scripts -->
     @livewireScripts
 
-    <!-- Optional global JS: axios (CDN) + local app script -->
+    <!-- Optional global JS -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="{{ asset('js/app.js') }}"></script>
 

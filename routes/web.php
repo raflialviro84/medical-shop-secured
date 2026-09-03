@@ -37,48 +37,51 @@ Route::get('/search', [HomeController::class, 'search'])
 // Cryptographic Session Binding Status
 // ======================================================
 
-Route::get('/security/session-binding/status', function (Request $request) {
+Route::get(
+    '/security/session-binding/status',
+    function (Request $request) {
 
-    /*
-     * Guest / belum login.
-     *
-     * Endpoint status bukan protected resource,
-     * sehingga guest tetap mendapat HTTP 200.
-     */
-    if (!$request->user()) {
+        /*
+         * Guest / belum login.
+         *
+         * Endpoint status bukan protected resource,
+         * sehingga guest tetap mendapat HTTP 200.
+         */
+        if (!$request->user()) {
+            return response()->json([
+                'authenticated' => false,
+                'bound' => false,
+                'binding_id' => null,
+            ], 200);
+        }
+
+        /*
+         * Cari binding aktif berdasarkan:
+         *
+         * session_id
+         * user_id
+         * revoked_at = NULL
+         */
+        $binding = CryptographicSessionBinding::query()
+            ->where(
+                'session_id',
+                $request->session()->getId()
+            )
+            ->where(
+                'user_id',
+                $request->user()->id
+            )
+            ->whereNull('revoked_at')
+            ->first();
+
         return response()->json([
-            'authenticated' => false,
-            'bound' => false,
-            'binding_id' => null,
+            'authenticated' => true,
+            'bound' => $binding !== null,
+            'binding_id' => $binding?->id,
         ], 200);
+
     }
-
-    /*
-     * Cari binding aktif berdasarkan:
-     *
-     * session_id
-     * user_id
-     * revoked_at = NULL
-     */
-    $binding = CryptographicSessionBinding::query()
-        ->where(
-            'session_id',
-            $request->session()->getId()
-        )
-        ->where(
-            'user_id',
-            $request->user()->id
-        )
-        ->whereNull('revoked_at')
-        ->first();
-
-    return response()->json([
-        'authenticated' => true,
-        'bound' => $binding !== null,
-        'binding_id' => $binding?->id,
-    ], 200);
-
-})->name('security.session-binding.status');
+)->name('security.session-binding.status');
 
 
 // ======================================================
@@ -136,26 +139,24 @@ Route::post('/logout', function (Request $request) {
 
 
 // ======================================================
-// Authenticated user routes
+// Authentication-only routes
 // ======================================================
 
 Route::middleware(['auth'])->group(function () {
 
     // --------------------------------------------------
-    // Cryptographic Session Binding - Test Routes
-    // --------------------------------------------------
-
-    Route::get('/security/test', function () {
-        return response()->json([
-            'message' => 'Cryptographic protected route berhasil diakses.',
-        ]);
-    })->middleware('cryptographic.session');
-
-
-    // --------------------------------------------------
     // Baseline
-    // Hanya menggunakan Laravel authentication/session
     // --------------------------------------------------
+    //
+    // Hanya menggunakan Laravel authentication/session.
+    //
+    // Route ini sengaja TIDAK menggunakan:
+    //
+    //     cryptographic.session
+    //
+    // karena digunakan sebagai baseline penelitian untuk
+    // membandingkan session-only dengan mekanisme CSB.
+    //
 
     Route::get('/security/baseline', function () {
         return response()->json([
@@ -167,170 +168,170 @@ Route::middleware(['auth'])->group(function () {
 
 
     // --------------------------------------------------
-    // POST cryptographic test
+    // Cryptographic Session Proof
     // --------------------------------------------------
-
-    Route::post('/security/test-post', function () {
-        return response()->json([
-            'message' => 'POST cryptographic route berhasil diakses.',
-        ]);
-    })->middleware('cryptographic.session');
-
-
-    // --------------------------------------------------
-    // Cryptographic Session Binding
-    // --------------------------------------------------
-
-    Route::post(
-        '/security/session-binding',
-        [
-            CryptographicSessionBindingController::class,
-            'store'
-        ]
-    )->name('security.session-binding.store');
-
+    //
+    // Endpoint ini sengaja hanya membutuhkan authentication.
+    // Proof diverifikasi di dalam controller.
+    //
 
     Route::post(
         '/security/session-proof',
         [
             CryptographicSessionBindingController::class,
-            'verify'
+            'verify',
         ]
     )->name('security.session-proof.verify');
 
 
-    // --------------------------------------------------
-    // Cryptographic Navigation Grant
-    // --------------------------------------------------
-    //
-    // Digunakan ketika browser melakukan navigasi GET
-    // menuju protected page seperti /transactions.
-    //
-    // Proof yang dikirim tetap harus dibuat untuk:
-    //
-    //     GET /transactions
-    //
-    // bukan:
-    //
-    //     POST /security/navigation-grant
-    //
-    Route::post(
-        '/security/navigation-grant',
-        [
-            CryptographicSessionBindingController::class,
-            'createNavigationGrant'
-        ]
-    )->name('security.navigation-grant');
+    // ==================================================
+    // CSB Protected User Routes
+    // ==================================================
+
+    Route::middleware(['cryptographic.session'])->group(function () {
+
+        // --------------------------------------------------
+        // Cryptographic Session Binding - Test Routes
+        // --------------------------------------------------
+
+        Route::get('/security/test', function () {
+            return response()->json([
+                'message' =>
+                    'Cryptographic protected route berhasil diakses.',
+            ]);
+        });
 
 
-    // --------------------------------------------------
-    // Cart routes
-    // --------------------------------------------------
+        // --------------------------------------------------
+        // POST cryptographic test
+        // --------------------------------------------------
 
-    Route::view('/cart', 'cart.index')
-        ->name('cart.index');
-
-    Route::post(
-        '/cart/add/{product}',
-        [CartController::class, 'add']
-    )->name('cart.add');
-
-    Route::post(
-        '/cart/decrease/{product}',
-        [CartController::class, 'decrease']
-    )->name('cart.decrease');
-
-    Route::post(
-        '/cart/increase/{product}',
-        [CartController::class, 'increase']
-    )->name('cart.increase');
-
-    Route::put(
-        '/cart/{cart}',
-        [CartController::class, 'update']
-    )->name('cart.update');
-
-    Route::delete(
-        '/cart/{cart}',
-        [CartController::class, 'remove']
-    )->name('cart.remove');
-
-    Route::delete(
-        '/cart',
-        [CartController::class, 'clear']
-    )->name('cart.clear');
+        Route::post('/security/test-post', function () {
+            return response()->json([
+                'message' =>
+                    'POST cryptographic route berhasil diakses.',
+            ]);
+        });
 
 
-    // --------------------------------------------------
-    // Transaction routes
-    // --------------------------------------------------
+        // --------------------------------------------------
+        // Cart routes
+        // --------------------------------------------------
 
-    /*
-     * Halaman transaksi TIDAK boleh diakses dengan
-     * GET biasa hanya bermodal session cookie.
-     *
-     * Protected resource ini menggunakan middleware:
-     *
-     *     auth
-     *     cryptographic.resource
-     *
-     * cryptographic.resource akan menerima salah satu:
-     *
-     * 1. DPoP proof untuk request biasa
-     * 2. One-time navigation grant untuk browser navigation
-     */
-    Route::view('/transactions', 'transactions.index')
-        ->middleware('cryptographic.resource')
-        ->name('transactions.index');
+        Route::view('/cart', 'cart.index')
+            ->name('cart.index');
 
 
-    Route::get(
-        '/transactions/{transaction}',
-        function (Transaction $transaction) {
-            return view(
-                'transactions.show',
-                compact('transaction')
-            );
-        }
-    )->name('transactions.show');
+        Route::post(
+            '/cart/add/{product}',
+            [CartController::class, 'add']
+        )->name('cart.add');
 
 
-    Route::get(
-        '/transactions/{transaction}/invoice',
-        [TransactionController::class, 'invoice']
-    )->name('transactions.invoice');
+        Route::post(
+            '/cart/decrease/{product}',
+            [CartController::class, 'decrease']
+        )->name('cart.decrease');
 
 
-    Route::post(
-        '/transactions',
-        [TransactionController::class, 'checkout']
-    )->name('transactions.store');
+        Route::post(
+            '/cart/increase/{product}',
+            [CartController::class, 'increase']
+        )->name('cart.increase');
 
 
-    Route::post(
-        '/checkout',
-        [TransactionController::class, 'checkout']
-    )->name('checkout');
+        Route::put(
+            '/cart/{cart}',
+            [CartController::class, 'update']
+        )->name('cart.update');
 
 
-    Route::post(
-        '/transactions/{transaction}/pay',
-        [TransactionController::class, 'pay']
-    )->name('transactions.pay');
+        Route::delete(
+            '/cart/{cart}',
+            [CartController::class, 'remove']
+        )->name('cart.remove');
 
 
-    Route::post(
-        '/transactions/{transaction}/done',
-        [TransactionController::class, 'markAsDone']
-    )->name('transactions.done');
+        Route::delete(
+            '/cart',
+            [CartController::class, 'clear']
+        )->name('cart.clear');
+
+
+        // --------------------------------------------------
+        // Transaction routes
+        // --------------------------------------------------
+
+        Route::get(
+            '/transactions',
+            function () {
+                return view('transactions.index');
+            }
+        )->name('transactions.index');
+
+
+        Route::get(
+            '/transactions/{transaction}',
+            function (Transaction $transaction) {
+                return view(
+                    'transactions.show',
+                    compact('transaction')
+                );
+            }
+        )->name('transactions.show');
+
+
+        Route::get(
+            '/transactions/{transaction}/invoice',
+            [TransactionController::class, 'invoice']
+        )->name('transactions.invoice');
+
+
+        Route::post(
+            '/transactions',
+            [TransactionController::class, 'checkout']
+        )->name('transactions.store');
+
+
+        Route::post(
+            '/checkout',
+            [TransactionController::class, 'checkout']
+        )->name('checkout');
+
+
+        Route::post(
+            '/transactions/{transaction}/pay',
+            [TransactionController::class, 'pay']
+        )->name('transactions.pay');
+
+
+        Route::post(
+            '/transactions/{transaction}/done',
+            [TransactionController::class, 'markAsDone']
+        )->name('transactions.done');
+    });
 });
 
 
 // ======================================================
 // Admin routes
 // ======================================================
+//
+// Admin route juga membutuhkan:
+//
+//     auth
+//     admin
+//     cryptographic.session
+//
+// Sehingga session cookie saja tidak cukup untuk masuk
+// ke area admin.
+//
 
-Route::middleware(['admin', 'auth'])
+Route::middleware([
+    'auth',
+    'admin',
+    'cryptographic.session',
+])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
@@ -449,4 +450,5 @@ Route::middleware(['admin', 'auth'])
             '/transactions/{transaction}/ship',
             [TransactionController::class, 'ship']
         )->name('transactions.ship');
+
     });

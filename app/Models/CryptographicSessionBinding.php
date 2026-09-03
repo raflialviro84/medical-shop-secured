@@ -18,12 +18,19 @@ class CryptographicSessionBinding extends Model
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
         'public_key' => 'array',
         'revoked_at' => 'datetime',
     ];
 
+    /**
+     * User yang memiliki session binding ini.
+     */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(
+            User::class,
+            'user_id'
+        );
     }
 }

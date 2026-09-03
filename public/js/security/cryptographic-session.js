@@ -16,9 +16,6 @@
     const STATUS_ENDPOINT =
         '/security/session-binding/status';
 
-    const BINDING_ENDPOINT =
-        '/security/session-binding';
-
 
     // =====================================================
     // IndexedDB
@@ -85,6 +82,7 @@
         });
     }
 
+
     async function saveValue(name, value) {
         const db = await openDatabase();
 
@@ -143,6 +141,7 @@
         });
     }
 
+
     async function getKey(name) {
         const db = await openDatabase();
 
@@ -198,6 +197,7 @@
         });
     }
 
+
     async function clearCryptographicState() {
         await deleteValue(PRIVATE_KEY_NAME);
         await deleteValue(PUBLIC_KEY_NAME);
@@ -251,33 +251,15 @@
         );
 
         console.log(
-            '[CSB] Public Key:',
-            {
-                type: keyPair.publicKey.type,
-                algorithm:
-                    keyPair.publicKey.algorithm,
-                extractable:
-                    keyPair.publicKey.extractable,
-                usages:
-                    keyPair.publicKey.usages
-            }
-        );
-
-        console.log(
-            '[CSB] Private Key:',
+            '[CSB] Private key disimpan sebagai non-extractable key:',
             {
                 type: keyPair.privateKey.type,
-                algorithm:
-                    keyPair.privateKey.algorithm,
+                algorithm: keyPair.privateKey.algorithm,
                 extractable:
                     keyPair.privateKey.extractable,
                 usages:
                     keyPair.privateKey.usages
             }
-        );
-
-        console.log(
-            '[CSB] Key pair berhasil disimpan ke IndexedDB.'
         );
 
         return keyPair;
@@ -293,6 +275,7 @@
             PRIVATE_KEY_NAME
         );
     }
+
 
     async function getPublicKey() {
         return await getKey(
@@ -320,6 +303,7 @@
             publicKey
         );
     }
+
 
     async function getPublicKeyJwk() {
         return await exportPublicKeyJwk();
@@ -375,9 +359,7 @@
         let binary = '';
 
         for (const byte of bytes) {
-            binary += String.fromCharCode(
-                byte
-            );
+            binary += String.fromCharCode(byte);
         }
 
         return btoa(binary)
@@ -385,6 +367,7 @@
             .replace(/\//g, '_')
             .replace(/=+$/g, '');
     }
+
 
     function stringToBase64Url(value) {
         return base64UrlEncode(
@@ -394,83 +377,72 @@
 
 
     // =====================================================
-    // Register Public Key
+    // Login Public Key Preparation
     // =====================================================
 
-    async function registerPublicKey() {
-        const publicKey =
-            await exportPublicKeyJwk();
+    async function prepareLoginPublicKey() {
+        const input =
+            document.getElementById('publicKey');
 
-        const csrfToken =
-            document
-                .querySelector(
-                    'meta[name="csrf-token"]'
-                )
-                ?.getAttribute('content');
-
-        if (!csrfToken) {
-            throw new Error(
-                'CSRF token tidak ditemukan.'
-            );
+        if (!input) {
+            return;
         }
-
-        const response = await fetch(
-            BINDING_ENDPOINT,
-            {
-                method: 'POST',
-
-                headers: {
-                    'Content-Type':
-                        'application/json',
-
-                    'Accept':
-                        'application/json',
-
-                    'X-CSRF-TOKEN':
-                        csrfToken
-                },
-
-                credentials: 'same-origin',
-
-                body: JSON.stringify({
-                    public_key: publicKey
-                })
-            }
-        );
-
-        let data;
 
         try {
-            data = await response.json();
+            let publicKey =
+                await getPublicKey();
+
+            let privateKey =
+                await getPrivateKey();
+
+            /*
+             * Jika belum memiliki key pair,
+             * buat key pair baru.
+             */
+            if (!publicKey || !privateKey) {
+                await clearCryptographicState();
+
+                await generateKeyPair();
+
+                publicKey =
+                    await getPublicKey();
+
+                privateKey =
+                    await getPrivateKey();
+            }
+
+            if (!publicKey || !privateKey) {
+                throw new Error(
+                    'Cryptographic key pair gagal disiapkan.'
+                );
+            }
+
+            const publicKeyJwk =
+                await exportPublicKeyJwk();
+
+            input.value =
+                JSON.stringify(publicKeyJwk);
+
+            /*
+             * Trigger event agar wire:model
+             * Livewire menerima nilai publicKey.
+             */
+            input.dispatchEvent(
+                new Event('input', {
+                    bubbles: true
+                })
+            );
+
+            console.log(
+                '[CSB] Public key berhasil disiapkan untuk login.'
+            );
+
         } catch (error) {
-            throw new Error(
-                'Response register public key bukan JSON.'
+            console.error(
+                '[CSB] Gagal menyiapkan public key login:',
+                error
             );
         }
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Gagal mendaftarkan public key.'
-            );
-        }
-
-        await saveValue(
-            BINDING_ID_NAME,
-            data.binding_id
-        );
-
-        console.log(
-            '[CSB] Public key berhasil di-bind.',
-            data
-        );
-
-        console.log(
-            '[CSB] Binding ID disimpan:',
-            data.binding_id
-        );
-
-        return data;
     }
 
 
@@ -505,10 +477,6 @@
                 data
             );
 
-        console.log(
-            '[CSB] Message berhasil ditandatangani.'
-        );
-
         return {
             message,
             signature
@@ -534,23 +502,15 @@
                 message
             );
 
-        const valid =
-            await window.crypto.subtle.verify(
-                {
-                    name: 'ECDSA',
-                    hash: 'SHA-256'
-                },
-                publicKey,
-                signature,
-                data
-            );
-
-        console.log(
-            '[CSB] Signature verification:',
-            valid
+        return await window.crypto.subtle.verify(
+            {
+                name: 'ECDSA',
+                hash: 'SHA-256'
+            },
+            publicKey,
+            signature,
+            data
         );
-
-        return valid;
     }
 
 
@@ -591,23 +551,15 @@
                 data
             );
 
-        const valid =
-            await window.crypto.subtle.verify(
-                {
-                    name: 'ECDSA',
-                    hash: 'SHA-256'
-                },
-                publicKey,
-                signature,
-                data
-            );
-
-        console.log(
-            '[CSB] Local key pair verification:',
-            valid
+        return await window.crypto.subtle.verify(
+            {
+                name: 'ECDSA',
+                hash: 'SHA-256'
+            },
+            publicKey,
+            signature,
+            data
         );
-
-        return valid;
     }
 
 
@@ -615,168 +567,7 @@
     // Cryptographic Proof
     // =====================================================
 
-    async function createCryptographicProof() {
-        const privateKey =
-            await getPrivateKey();
-
-        const bindingId =
-            await getBindingId();
-
-        const publicKeyJwk =
-            await getPublicKeyJwk();
-
-        if (!privateKey) {
-            throw new Error(
-                'Private key tidak ditemukan.'
-            );
-        }
-
-        if (!bindingId) {
-            throw new Error(
-                'Binding ID tidak ditemukan.'
-            );
-        }
-
-        const header = {
-            typ: 'csb+jwt',
-            alg: 'ES256',
-            jwk: publicKeyJwk
-        };
-
-        const payload = {
-            jti: generateJti(),
-            iat: Math.floor(
-                Date.now() / 1000
-            ),
-            htm: 'POST',
-            htu: '/security/session-proof',
-            binding_id: bindingId
-        };
-
-        const encodedHeader =
-            stringToBase64Url(
-                JSON.stringify(header)
-            );
-
-        const encodedPayload =
-            stringToBase64Url(
-                JSON.stringify(payload)
-            );
-
-        const signingInput =
-            `${encodedHeader}.${encodedPayload}`;
-
-        const signature =
-            await window.crypto.subtle.sign(
-                {
-                    name: 'ECDSA',
-                    hash: 'SHA-256'
-                },
-                privateKey,
-                new TextEncoder().encode(
-                    signingInput
-                )
-            );
-
-        const encodedSignature =
-            base64UrlEncode(
-                new Uint8Array(signature)
-            );
-
-        const proof =
-            `${signingInput}.${encodedSignature}`;
-
-        console.log(
-            '[CSB] Cryptographic proof berhasil dibuat.'
-        );
-
-        return {
-            header,
-            payload,
-            proof
-        };
-    }
-
-
-    // =====================================================
-    // Send Cryptographic Proof
-    // =====================================================
-
-    async function sendCryptographicProof() {
-        const result =
-            await createCryptographicProof();
-
-        const csrfToken =
-            document
-                .querySelector(
-                    'meta[name="csrf-token"]'
-                )
-                ?.getAttribute('content');
-
-        if (!csrfToken) {
-            throw new Error(
-                'CSRF token tidak ditemukan.'
-            );
-        }
-
-        const response =
-            await fetch(
-                '/security/session-proof',
-                {
-                    method: 'POST',
-
-                    headers: {
-                        'Content-Type':
-                            'application/json',
-
-                        'Accept':
-                            'application/json',
-
-                        'X-CSRF-TOKEN':
-                            csrfToken
-                    },
-
-                    credentials:
-                        'same-origin',
-
-                    body: JSON.stringify({
-                        proof: result.proof
-                    })
-                }
-            );
-
-        let data;
-
-        try {
-            data =
-                await response.json();
-        } catch (error) {
-            throw new Error(
-                'Response server bukan JSON.'
-            );
-        }
-
-        console.log(
-            '[CSB] Server verification response:',
-            data
-        );
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Cryptographic proof ditolak.'
-            );
-        }
-
-        return data;
-    }
-
-
-    // =====================================================
-    // Generic Request Proof
-    // =====================================================
-
-    async function createRequestProof(
+    async function createCryptographicProof(
         method,
         url
     ) {
@@ -808,7 +599,16 @@
             new URL(
                 url,
                 window.location.origin
-            ).pathname;
+            );
+
+        if (
+            normalizedUrl.origin !==
+            window.location.origin
+        ) {
+            throw new Error(
+                'Request harus berasal dari origin aplikasi sendiri.'
+            );
+        }
 
         const header = {
             typ: 'csb+jwt',
@@ -825,7 +625,8 @@
 
             htm: normalizedMethod,
 
-            htu: normalizedUrl,
+            htu:
+                normalizedUrl.pathname,
 
             binding_id: bindingId
         };
@@ -868,45 +669,24 @@
         };
     }
 
-    async function navigateWithCryptographicProof(url) {
-        const targetUrl = new URL(
-            url,
-            window.location.origin
-        );
 
-        /*
-        * Hanya izinkan navigasi ke origin aplikasi sendiri.
-        */
-        if (targetUrl.origin !== window.location.origin) {
-            throw new Error('Invalid navigation target.');
-        }
+    // =====================================================
+    // Send Cryptographic Proof
+    // =====================================================
 
-        /*
-        * Path tujuan.
-        *
-        * Contoh:
-        * /transactions
-        */
-        const targetPath = targetUrl.pathname;
+    async function sendCryptographicProof() {
+        const result =
+            await createCryptographicProof(
+                'POST',
+                '/security/session-proof'
+            );
 
-        /*
-        * Buat proof untuk request TUJUAN.
-        *
-        * Proof:
-        *
-        * GET /transactions
-        */
-        const proofData = await createRequestProof(
-            'GET',
-            targetUrl.href
-        );
-
-        /*
-        * Ambil CSRF token Laravel.
-        */
-        const csrfToken = document
-            .querySelector('meta[name="csrf-token"]')
-            ?.getAttribute('content');
+        const csrfToken =
+            document
+                .querySelector(
+                    'meta[name="csrf-token"]'
+                )
+                ?.getAttribute('content');
 
         if (!csrfToken) {
             throw new Error(
@@ -914,74 +694,64 @@
             );
         }
 
-        /*
-        * Request navigation grant.
-        */
-        const response = await fetch(
-            '/security/navigation-grant',
-            {
-                method: 'POST',
+        const response =
+            await fetch(
+                '/security/session-proof',
+                {
+                    method: 'POST',
 
-                credentials: 'same-origin',
+                    headers: {
+                        'Content-Type':
+                            'application/json',
 
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                        'Accept':
+                            'application/json',
 
-                    /*
-                    * Proof dibuat untuk:
-                    * GET /transactions
-                    */
-                    'DPoP': proofData.proof,
+                        'X-CSRF-TOKEN':
+                            csrfToken,
 
-                    /*
-                    * CSRF Laravel.
-                    */
-                    'X-CSRF-TOKEN': csrfToken,
-                },
+                        'DPoP':
+                            result.proof
+                    },
 
-                body: JSON.stringify({
-                    proof: proofData.proof,
-                    path: targetPath,
-                }),
-            }
-        );
+                    credentials:
+                        'same-origin',
+
+                    body: JSON.stringify({
+                        proof: result.proof
+                    })
+                }
+            );
 
         let data;
 
         try {
-            data = await response.json();
+            data =
+                await response.json();
         } catch {
             throw new Error(
-                'Server mengembalikan response yang tidak valid.'
+                'Response server bukan JSON.'
             );
         }
 
         if (!response.ok) {
             throw new Error(
                 data.message ||
-                'Gagal membuat cryptographic navigation grant.'
+                'Cryptographic proof ditolak.'
             );
         }
 
-        if (!data.url) {
-            throw new Error(
-                'Navigation grant tidak mengembalikan URL.'
-            );
-        }
+        console.log(
+            '[CSB] Server verification response:',
+            data
+        );
 
-        /*
-        * Lakukan navigasi browser.
-        *
-        * Contoh:
-        *
-        * /transactions?nav_token=abcdef...
-        */
-        window.location.assign(data.url);
+        return data;
     }
 
+
     // =====================================================
-    // Request With Cryptographic Proof
+    // Generic Request With Cryptographic Proof
     // =====================================================
 
     async function requestWithCryptographicProof(
@@ -998,13 +768,19 @@
                 window.location.origin
             );
 
-        const requestUrl =
-            absoluteUrl.pathname;
+        if (
+            absoluteUrl.origin !==
+            window.location.origin
+        ) {
+            throw new Error(
+                'Request harus berasal dari origin aplikasi sendiri.'
+            );
+        }
 
         const proofResult =
-            await createRequestProof(
+            await createCryptographicProof(
                 method,
-                requestUrl
+                absoluteUrl.href
             );
 
         const headers =
@@ -1018,10 +794,7 @@
         );
 
         /*
-         * Laravel CSRF protection.
-         *
-         * POST, PUT, PATCH, DELETE
-         * membutuhkan X-CSRF-TOKEN.
+         * Laravel CSRF protection
          */
         if (
             [
@@ -1077,9 +850,13 @@
             STATUS_ENDPOINT,
             {
                 method: 'GET',
-                credentials: 'same-origin',
+
+                credentials:
+                    'same-origin',
+
                 headers: {
-                    'Accept': 'application/json'
+                    'Accept':
+                        'application/json'
                 }
             }
         );
@@ -1104,78 +881,37 @@
                 await getCurrentBindingStatus();
 
             /*
-             * -------------------------------------------------
-             * Guest
-             * -------------------------------------------------
+             * Guest tidak memiliki cryptographic
+             * session binding.
+             *
+             * Jika berada di halaman login,
+             * public key akan dipersiapkan
+             * oleh prepareLoginPublicKey().
              */
-            if (
-                !status.authenticated
-            ) {
+            if (!status.authenticated) {
                 return null;
             }
 
-
             /*
-             * -------------------------------------------------
-             * CASE 1
+             * Session authenticated tetapi
+             * belum memiliki binding.
              *
-             * Session authenticated,
-             * tetapi server belum memiliki binding.
+             * JANGAN membuat binding otomatis.
              *
-             * Ini biasanya terjadi setelah:
-             * - login baru
-             * - session baru
-             * - session rotation
-             * -------------------------------------------------
+             * Binding harus berasal dari
+             * proses login.
              */
             if (!status.bound) {
-
-                console.log(
-                    '[CSB] Session belum memiliki binding. Membuat binding baru...'
-                );
-
-                /*
-                 * State browser dari session sebelumnya
-                 * harus dibersihkan.
-                 */
-                await clearCryptographicState();
-
-                /*
-                 * Generate key pair baru.
-                 */
-                await generateKeyPair();
-
-                /*
-                 * Register public key baru.
-                 */
-                const result =
-                    await registerPublicKey();
-
-                console.log(
-                    '[CSB] Automatic enrollment berhasil.',
-                    result
+                console.error(
+                    '[CSB] Session authenticated tetapi belum memiliki binding.'
                 );
 
                 return {
                     authenticated: true,
-                    bound: true,
-                    binding_id:
-                        result.binding_id,
-                    reused: false
+                    bound: false,
+                    keyMismatch: true
                 };
             }
-
-
-            /*
-             * -------------------------------------------------
-             * CASE 2
-             *
-             * Server sudah memiliki binding.
-             *
-             * Periksa apakah browser mempunyai
-             * binding ID dan private key yang sesuai.
-             * -------------------------------------------------
-             */
 
             const localBindingId =
                 await getBindingId();
@@ -1183,13 +919,21 @@
             const privateKey =
                 await getPrivateKey();
 
+            const publicKey =
+                await getPublicKey();
+
+            /*
+             * Server memiliki binding dan
+             * browser memiliki state cryptographic
+             * lengkap.
+             */
             if (
                 privateKey &&
+                publicKey &&
                 localBindingId !== null &&
                 Number(localBindingId) ===
                     Number(status.binding_id)
             ) {
-
                 console.log(
                     '[CSB] Cryptographic session binding aktif:',
                     status.binding_id
@@ -1204,21 +948,13 @@
                 };
             }
 
-
             /*
-             * -------------------------------------------------
-             * CASE 3
-             *
              * Server memiliki binding,
-             * tetapi browser tidak mempunyai key
-             * yang sesuai.
-             *
-             * JANGAN membuat key baru.
+             * tetapi browser kehilangan atau
+             * memiliki key yang tidak sesuai.
              *
              * Fail closed.
-             * -------------------------------------------------
              */
-
             console.error(
                 '[CSB] Local cryptographic key tidak sesuai dengan server binding.',
                 {
@@ -1239,15 +975,15 @@
             };
 
         } catch (error) {
-
             console.error(
-                '[CSB] Automatic initialization gagal:',
+                '[CSB] Initialization gagal:',
                 error
             );
 
             return null;
         }
     }
+
 
     // =====================================================
     // Expose Public API
@@ -1265,8 +1001,6 @@
 
         getPublicKeyJwk,
 
-        registerPublicKey,
-
         getBindingId,
 
         signTestMessage,
@@ -1279,7 +1013,8 @@
 
         sendCryptographicProof,
 
-        createRequestProof,
+        createRequestProof:
+            createCryptographicProof,
 
         requestWithCryptographicProof,
 
@@ -1291,7 +1026,7 @@
 
         initializeCryptographicSession,
 
-        navigateWithCryptographicProof
+        prepareLoginPublicKey
     };
 
 
@@ -1302,15 +1037,17 @@
     document.addEventListener(
         'DOMContentLoaded',
         async () => {
-            /*
-            * Bersihkan one-time navigation token
-            * dari address bar.
-            */
-            cleanNavigationTokenFromUrl();
 
             /*
-            * Jalankan lifecycle cryptographic session.
-            */
+             * Persiapkan public key untuk
+             * form login jika halaman login
+             * sedang aktif.
+             */
+            await prepareLoginPublicKey();
+
+            /*
+             * Periksa status binding session.
+             */
             await initializeCryptographicSession();
         }
     );
@@ -1353,269 +1090,26 @@
             }
 
             /*
-             * Hentikan submit pertama
-             * sampai local state selesai dibersihkan.
+             * Jangan kirim state cryptographic
+             * lama setelah logout.
              */
             event.preventDefault();
 
             try {
-
                 await clearCryptographicState();
 
                 console.log(
                     '[CSB] Cryptographic state dibersihkan sebelum logout.'
                 );
-
             } catch (error) {
-
                 console.error(
                     '[CSB] Gagal membersihkan cryptographic state:',
                     error
                 );
             }
 
-            /*
-             * Submit ulang.
-             *
-             * form.submit() tidak memicu
-             * event submit lagi.
-             */
             form.submit();
         }
     );
 
-    document.addEventListener('click', async (event) => {
-        const link = event.target.closest(
-            'a[data-cryptographic-navigation]'
-        );
-
-        /*
-        * Bukan link yang menggunakan CSB navigation.
-        */
-        if (!link) {
-            return;
-        }
-
-        /*
-        * Biarkan browser menangani:
-        *
-        * Ctrl + click
-        * Cmd + click
-        * Shift + click
-        * Alt + click
-        */
-        if (
-            event.ctrlKey ||
-            event.metaKey ||
-            event.shiftKey ||
-            event.altKey
-        ) {
-            return;
-        }
-
-        /*
-        * Jika link membuka tab baru, jangan intercept.
-        */
-        if (
-            link.target &&
-            link.target !== '_self'
-        ) {
-            return;
-        }
-
-        const href = link.href;
-
-        if (!href) {
-            return;
-        }
-
-        const targetUrl = new URL(
-            href,
-            window.location.origin
-        );
-
-        /*
-        * Hanya intercept URL dari aplikasi sendiri.
-        */
-        if (
-            targetUrl.origin !== window.location.origin
-        ) {
-            return;
-        }
-
-        /*
-        * Cegah browser langsung melakukan:
-        *
-        * GET /transactions
-        *
-        * karena belum ada DPoP / navigation grant.
-        */
-        event.preventDefault();
-
-        /*
-        * Optional: cegah double click selama request berjalan.
-        */
-        if (link.dataset.navigationLoading === 'true') {
-            return;
-        }
-
-        link.dataset.navigationLoading = 'true';
-
-        try {
-            await navigateWithCryptographicProof(
-                targetUrl.href
-            );
-        } catch (error) {
-            console.error(
-                'Cryptographic navigation failed:',
-                error
-            );
-
-            alert(
-                error?.message ||
-                'Navigasi gagal karena cryptographic proof tidak valid.'
-            );
-
-            link.dataset.navigationLoading = 'false';
-        }
-    });
-
-    document.addEventListener(
-    'click',
-    async (event) => {
-        const link = event.target.closest(
-            'a[data-cryptographic-navigation]'
-        );
-
-        /*
-         * Bukan link protected navigation.
-         */
-        if (!link) {
-            return;
-        }
-
-        /*
-         * Jangan mengambil alih:
-         *
-         * Ctrl + click
-         * Cmd + click
-         * Shift + click
-         * Alt + click
-         */
-        if (
-            event.ctrlKey ||
-            event.metaKey ||
-            event.shiftKey ||
-            event.altKey
-        ) {
-            return;
-        }
-
-        /*
-         * Jangan intercept link target="_blank"
-         * atau target lain.
-         */
-        if (
-            link.target &&
-            link.target !== '_self'
-        ) {
-            return;
-        }
-
-        const href = link.href;
-
-        if (!href) {
-            return;
-        }
-
-        const targetUrl = new URL(
-            href,
-            window.location.origin
-        );
-
-        /*
-         * Hanya URL dari aplikasi sendiri.
-         */
-        if (
-            targetUrl.origin !== window.location.origin
-        ) {
-            return;
-        }
-
-        /*
-         * Cegah browser langsung melakukan:
-         *
-         * GET /transactions
-         *
-         * karena request tersebut tidak mempunyai DPoP.
-         */
-        event.preventDefault();
-
-        /*
-         * Cegah double-click.
-         */
-        if (
-            link.dataset.navigationLoading === 'true'
-        ) {
-            return;
-        }
-
-        link.dataset.navigationLoading = 'true';
-
-        try {
-            await navigateWithCryptographicProof(
-                targetUrl.href
-            );
-        } catch (error) {
-            console.error(
-                'Cryptographic navigation failed:',
-                error
-            );
-
-            alert(
-                error?.message ||
-                'Navigasi gagal karena cryptographic proof tidak valid.'
-            );
-
-            link.dataset.navigationLoading = 'false';
-        }
-    }
-);
-
 })();
-
-function cleanNavigationTokenFromUrl() {
-    const currentUrl = new URL(
-        window.location.href
-    );
-
-    if (
-        !currentUrl.searchParams.has(
-            'nav_token'
-        )
-    ) {
-        return;
-    }
-
-    currentUrl.searchParams.delete(
-        'nav_token'
-    );
-
-    const queryString =
-        currentUrl.searchParams.toString();
-
-    const cleanUrl =
-        currentUrl.pathname +
-        (
-            queryString
-                ? '?' + queryString
-                : ''
-        ) +
-        currentUrl.hash;
-
-    window.history.replaceState(
-        {},
-        document.title,
-        cleanUrl
-    );
-}
