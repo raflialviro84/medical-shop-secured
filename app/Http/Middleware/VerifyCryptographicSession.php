@@ -18,27 +18,57 @@ class VerifyCryptographicSession
         Request $request,
         Closure $next
     ): Response {
+
         /*
-         * User harus sudah terautentikasi
-         * menggunakan Laravel session.
+         * =====================================================
+         * Endpoint yang tidak membutuhkan cryptographic proof
+         * =====================================================
+         *
+         * Endpoint ini merupakan bagian dari lifecycle
+         * authentication/session dan harus tetap dapat
+         * digunakan tanpa DPoP.
          */
+        $excludedPaths = [
+            '/logout',
+            '/login',
+            '/register',
+            '/security/session-binding/status',
+            '/security/session-proof',
+        ];
+
+        if (
+            in_array(
+                $request->getPathInfo(),
+                $excludedPaths,
+                true
+            )
+        ) {
+            return $next($request);
+        }
+
+
+        /*
+         * =====================================================
+         * Authentication
+         * =====================================================
+         */
+
         if (!$request->user()) {
             return response()->json([
                 'message' => 'Unauthenticated.',
+                'proof_valid' => false,
             ], 401);
         }
 
-        /*
-         * Ambil cryptographic proof dari header DPoP.
-         */
-        $proof = $request->header('DPoP');
 
         /*
-         * Session saja tidak cukup.
-         *
-         * Jika request tidak membawa proof,
-         * request ditolak.
+         * =====================================================
+         * Cryptographic Proof
+         * =====================================================
          */
+
+        $proof = $request->header('DPoP');
+
         if (!$proof) {
             return response()->json([
                 'message' =>
@@ -47,48 +77,34 @@ class VerifyCryptographicSession
             ], 403);
         }
 
+
         /*
-         * Verifikasi proof.
-         *
-         * ProofVerifier melakukan pemeriksaan:
-         *
-         * - format proof
-         * - header typ
-         * - algoritma ES256
-         * - JWK EC P-256
-         * - binding_id
-         * - session_id
-         * - user_id
-         * - public key binding
-         * - HTTP method
-         * - HTTP URI
-         * - timestamp
-         * - ECDSA signature
-         * - replay / JTI
+         * =====================================================
+         * Verify Proof
+         * =====================================================
          */
+
         $result = $this->proofVerifier->verify(
             $request,
             $proof
         );
 
-        /*
-         * Cryptographic proof tidak valid.
-         */
         if (!$result['valid']) {
             return response()->json([
                 'message' =>
                     $result['message'],
-
                 'proof_valid' =>
                     false,
             ], $result['status']);
         }
 
+
         /*
-         * Session + cryptographic proof valid.
-         *
-         * Request boleh diteruskan ke controller.
+         * =====================================================
+         * Access Granted
+         * =====================================================
          */
+
         return $next($request);
     }
 }
