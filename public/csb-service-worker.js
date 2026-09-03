@@ -358,6 +358,10 @@ function cryptographicFailureResponse(
 // Navigation interception
 // ============================================================
 
+// ============================================================
+// Navigation interception
+// ============================================================
+
 self.addEventListener(
     'fetch',
     event => {
@@ -365,13 +369,17 @@ self.addEventListener(
         const request =
             event.request;
 
+
         /*
-         * Hanya intercept top-level navigation.
+         * ======================================================
+         * Hanya intercept top-level navigation GET.
          *
-         * AJAX/fetch/API tidak diubah di sini.
+         * POST seperti /logout TIDAK boleh diintercept.
+         * ======================================================
          */
         if (
-            request.mode !== 'navigate'
+            request.mode !== 'navigate' ||
+            request.method.toUpperCase() !== 'GET'
         ) {
             return;
         }
@@ -392,20 +400,46 @@ self.addEventListener(
 
 
         /*
-         * Public page tidak membutuhkan CSB.
+         * ======================================================
+         * Public navigation
+         * ======================================================
          */
+
+        const publicPaths = [
+            '/',
+            '/products',
+            '/search',
+            '/login',
+            '/register',
+            '/logout',
+            '/security/session-binding/status'
+        ];
+
+
+        /*
+         * Product detail juga public.
+         */
+        const isProductPage =
+            url.pathname === '/products' ||
+            url.pathname.startsWith('/products/');
+
+
         if (
-            isPublicNavigation(
+            publicPaths.includes(
                 url.pathname
-            )
+            ) ||
+            isProductPage
         ) {
             return;
         }
 
 
         /*
-         * Protected navigation.
+         * ======================================================
+         * Protected navigation
+         * ======================================================
          */
+
         event.respondWith(
             (async () => {
 
@@ -418,7 +452,7 @@ self.addEventListener(
 
 
                     /*
-                     * Clone header request.
+                     * Copy request headers.
                      */
                     const headers =
                         new Headers(
@@ -426,6 +460,9 @@ self.addEventListener(
                         );
 
 
+                    /*
+                     * Tambahkan cryptographic proof.
+                     */
                     headers.set(
                         'DPoP',
                         proof
@@ -433,8 +470,8 @@ self.addEventListener(
 
 
                     /*
-                     * Buat request baru dengan
-                     * header DPoP.
+                     * Buat request baru
+                     * dengan DPoP header.
                      */
                     const protectedRequest =
                         new Request(
@@ -456,14 +493,26 @@ self.addEventListener(
                         error
                     );
 
+
                     /*
                      * Fail closed.
-                     *
-                     * Jangan pernah meneruskan
-                     * request protected tanpa proof.
                      */
-                    return cryptographicFailureResponse(
-                        'Cryptographic proof is required.'
+                    return new Response(
+                        JSON.stringify({
+                            message:
+                                'Cryptographic proof is required.',
+
+                            proof_valid:
+                                false
+                        }),
+                        {
+                            status: 403,
+
+                            headers: {
+                                'Content-Type':
+                                    'application/json'
+                            }
+                        }
                     );
                 }
             })()
