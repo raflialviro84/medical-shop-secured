@@ -875,114 +875,171 @@
     // Initialize Cryptographic Session
     // =====================================================
 
-    async function initializeCryptographicSession() {
-        try {
-            const status =
-                await getCurrentBindingStatus();
+async function initializeCryptographicSession() {
+    try {
+        const status =
+            await getCurrentBindingStatus();
 
-            /*
-             * Guest tidak memiliki cryptographic
-             * session binding.
-             *
-             * Jika berada di halaman login,
-             * public key akan dipersiapkan
-             * oleh prepareLoginPublicKey().
-             */
-            if (!status.authenticated) {
-                return null;
-            }
+        /*
+         * =================================================
+         * Guest
+         * =================================================
+         */
+        if (!status.authenticated) {
+            return null;
+        }
 
-            /*
-             * Session authenticated tetapi
-             * belum memiliki binding.
-             *
-             * JANGAN membuat binding otomatis.
-             *
-             * Binding harus berasal dari
-             * proses login.
-             */
-            if (!status.bound) {
-                console.error(
-                    '[CSB] Session authenticated tetapi belum memiliki binding.'
-                );
 
-                return {
-                    authenticated: true,
-                    bound: false,
-                    keyMismatch: true
-                };
-            }
-
-            const localBindingId =
-                await getBindingId();
-
-            const privateKey =
-                await getPrivateKey();
-
-            const publicKey =
-                await getPublicKey();
-
-            /*
-             * Server memiliki binding dan
-             * browser memiliki state cryptographic
-             * lengkap.
-             */
-            if (
-                privateKey &&
-                publicKey &&
-                localBindingId !== null &&
-                Number(localBindingId) ===
-                    Number(status.binding_id)
-            ) {
-                console.log(
-                    '[CSB] Cryptographic session binding aktif:',
-                    status.binding_id
-                );
-
-                return {
-                    authenticated: true,
-                    bound: true,
-                    binding_id:
-                        status.binding_id,
-                    reused: true
-                };
-            }
-
-            /*
-             * Server memiliki binding,
-             * tetapi browser kehilangan atau
-             * memiliki key yang tidak sesuai.
-             *
-             * Fail closed.
-             */
+        /*
+         * =================================================
+         * Authenticated tetapi belum memiliki binding
+         * =================================================
+         *
+         * Binding sekarang dibuat oleh LoginForm
+         * setelah Auth::attempt() berhasil.
+         *
+         * Jadi JavaScript TIDAK membuat binding baru.
+         */
+        if (!status.bound) {
             console.error(
-                '[CSB] Local cryptographic key tidak sesuai dengan server binding.',
-                {
-                    serverBindingId:
-                        status.binding_id,
+                '[CSB] Session authenticated tetapi belum memiliki binding.'
+            );
 
-                    localBindingId
-                }
+            return {
+                authenticated: true,
+                bound: false,
+                keyMismatch: true
+            };
+        }
+
+
+        /*
+         * =================================================
+         * Ambil cryptographic state lokal
+         * =================================================
+         */
+        const localBindingId =
+            await getBindingId();
+
+        const privateKey =
+            await getPrivateKey();
+
+        const publicKey =
+            await getPublicKey();
+
+
+        /*
+         * =================================================
+         * CASE 1
+         *
+         * Login berhasil dan server sudah mempunyai
+         * binding, tetapi binding ID belum tersimpan
+         * di IndexedDB.
+         *
+         * Ini adalah kondisi normal tepat setelah login.
+         * =================================================
+         */
+        if (
+            privateKey &&
+            publicKey &&
+            (
+                localBindingId === null ||
+                localBindingId === undefined
+            )
+        ) {
+            await saveValue(
+                BINDING_ID_NAME,
+                status.binding_id
+            );
+
+            console.log(
+                '[CSB] Binding ID dari server berhasil disimpan ke IndexedDB:',
+                status.binding_id
             );
 
             return {
                 authenticated: true,
                 bound: true,
-                binding_id:
-                    status.binding_id,
-                reused: false,
-                keyMismatch: true
+                binding_id: status.binding_id,
+                reused: false
             };
+        }
 
-        } catch (error) {
-            console.error(
-                '[CSB] Initialization gagal:',
-                error
+
+        /*
+         * =================================================
+         * CASE 2
+         *
+         * Browser sudah mempunyai binding ID dan
+         * ID tersebut sesuai dengan binding server.
+         * =================================================
+         */
+        if (
+            privateKey &&
+            publicKey &&
+            localBindingId !== null &&
+            Number(localBindingId) ===
+                Number(status.binding_id)
+        ) {
+            console.log(
+                '[CSB] Cryptographic session binding aktif:',
+                status.binding_id
             );
 
-            return null;
+            return {
+                authenticated: true,
+                bound: true,
+                binding_id: status.binding_id,
+                reused: true
+            };
         }
+
+
+        /*
+         * =================================================
+         * CASE 3
+         *
+         * Server mempunyai binding,
+         * tetapi browser tidak mempunyai private/public key.
+         *
+         * ATAU binding ID lokal berbeda dari server.
+         *
+         * Fail closed.
+         * =================================================
+         */
+        console.error(
+            '[CSB] Local cryptographic state tidak sesuai dengan server binding.',
+            {
+                serverBindingId:
+                    status.binding_id,
+
+                localBindingId,
+
+                hasPrivateKey:
+                    !!privateKey,
+
+                hasPublicKey:
+                    !!publicKey
+            }
+        );
+
+        return {
+            authenticated: true,
+            bound: true,
+            binding_id: status.binding_id,
+            reused: false,
+            keyMismatch: true
+        };
+
+    } catch (error) {
+        console.error(
+            '[CSB] Initialization gagal:',
+            error
+        );
+
+        return null;
     }
+}
 
 
     // =====================================================
