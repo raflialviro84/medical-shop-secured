@@ -21,27 +21,42 @@ class VerifyCryptographicSession
 
         /*
          * =====================================================
-         * Endpoint yang tidak membutuhkan cryptographic proof
+         * Authentication / Session Lifecycle Exclusions
          * =====================================================
          *
-         * Endpoint ini merupakan bagian dari lifecycle
-         * authentication/session dan harus tetap dapat
-         * digunakan tanpa DPoP.
+         * Endpoint berikut tidak membutuhkan cryptographic
+         * proof karena merupakan bagian dari lifecycle session
+         * atau endpoint CSB itu sendiri.
          */
-        $excludedPaths = [
-            '/logout',
-            '/login',
-            '/register',
-            '/security/session-binding/status',
-            '/security/session-proof',
-        ];
 
         if (
-            in_array(
-                $request->getPathInfo(),
-                $excludedPaths,
-                true
-            )
+            $request->isMethod('POST') &&
+            $request->is('logout')
+        ) {
+            return $next($request);
+        }
+
+        if (
+            $request->routeIs('logout')
+        ) {
+            return $next($request);
+        }
+
+        if (
+            $request->is('login') ||
+            $request->is('register')
+        ) {
+            return $next($request);
+        }
+
+        if (
+            $request->is('security/session-binding/status')
+        ) {
+            return $next($request);
+        }
+
+        if (
+            $request->is('security/session-proof')
         ) {
             return $next($request);
         }
@@ -55,44 +70,53 @@ class VerifyCryptographicSession
 
         if (!$request->user()) {
             return response()->json([
-                'message' => 'Unauthenticated.',
-                'proof_valid' => false,
+                'message' =>
+                    'Unauthenticated.',
+
+                'proof_valid' =>
+                    false,
             ], 401);
         }
 
 
         /*
          * =====================================================
-         * Cryptographic Proof
+         * Cryptographic Proof Required
          * =====================================================
          */
 
-        $proof = $request->header('DPoP');
+        $proof =
+            $request->header('DPoP');
 
         if (!$proof) {
             return response()->json([
                 'message' =>
                     'Cryptographic proof is required.',
-                'proof_valid' => false,
+
+                'proof_valid' =>
+                    false,
             ], 403);
         }
 
 
         /*
          * =====================================================
-         * Verify Proof
+         * Verify Cryptographic Proof
          * =====================================================
          */
 
-        $result = $this->proofVerifier->verify(
-            $request,
-            $proof
-        );
+        $result =
+            $this->proofVerifier->verify(
+                $request,
+                $proof
+            );
+
 
         if (!$result['valid']) {
             return response()->json([
                 'message' =>
                     $result['message'],
+
                 'proof_valid' =>
                     false,
             ], $result['status']);
@@ -101,7 +125,7 @@ class VerifyCryptographicSession
 
         /*
          * =====================================================
-         * Access Granted
+         * Cryptographic Verification Successful
          * =====================================================
          */
 
