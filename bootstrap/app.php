@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
 use App\Http\Middleware\VerifyCryptographicSession;
+use App\Http\Middleware\VerifyCryptographicResource;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,7 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => AdminMiddleware::class,
             'auth.custom' => AuthMiddleware::class,
             'auth' => \Illuminate\Auth\Middleware\Authenticate::class,
+
             'cryptographic.session' => VerifyCryptographicSession::class,
+            'cryptographic.navigation' => VerifyCryptographicNavigationGrant::class,
+            'cryptographic.resource' => VerifyCryptographicResource::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -1138,6 +1138,126 @@
         }
     }
 
+    async function navigateWithCryptographicProof(url) {
+        const targetUrl = new URL(url, window.location.origin);
+
+        /*
+        * Pastikan target masih berada pada origin aplikasi
+        */
+        if (targetUrl.origin !== window.location.origin) {
+            throw new Error('Invalid navigation target.');
+        }
+
+        /*
+        * Ambil path target.
+        *
+        * Contoh:
+        * /transactions
+        */
+        const targetPath = targetUrl.pathname;
+
+        /*
+        * Buat proof untuk REQUEST TUJUAN.
+        *
+        * Penting:
+        * proof ini adalah:
+        *
+        * GET /transactions
+        *
+        * bukan:
+        *
+        * POST /security/navigation-grant
+        */
+        const proofData = await createRequestProof(
+            'GET',
+            targetUrl.href
+        );
+
+        /*
+        * CSRF token Laravel
+        */
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
+
+        if (!csrfToken) {
+            throw new Error('CSRF token tidak ditemukan.');
+        }
+
+        /*
+        * Kirim proof ke endpoint navigation grant.
+        */
+        const response = await fetch(
+            '/security/navigation-grant',
+            {
+                method: 'POST',
+
+                credentials: 'same-origin',
+
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+
+                    /*
+                    * Proof untuk:
+                    * GET /transactions
+                    */
+                    'DPoP': proofData.proof,
+
+                    /*
+                    * CSRF Laravel
+                    */
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+
+                body: JSON.stringify({
+                    /*
+                    * Proof yang sama dikirim sebagai body
+                    * karena controller navigation grant
+                    * membacanya dari request JSON.
+                    */
+                    proof: proofData.proof,
+
+                    /*
+                    * Target resource yang ingin dibuka.
+                    */
+                    path: targetPath,
+                }),
+            }
+        );
+
+        let data;
+
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error(
+                'Server mengembalikan response yang tidak valid.'
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Gagal membuat cryptographic navigation grant.'
+            );
+        }
+
+        if (!data.url) {
+            throw new Error(
+                'Navigation grant tidak mengembalikan URL.'
+            );
+        }
+
+        /*
+        * Grant berhasil dibuat.
+        *
+        * Browser sekarang melakukan navigasi normal
+        * menggunakan URL yang memiliki one-time token.
+        */
+        window.location.assign(data.url);
+    }
+
 
     // =====================================================
     // Expose Public API
@@ -1269,5 +1389,101 @@
             form.submit();
         }
     );
+
+    document.addEventListener('click', async (event) => {
+        const link = event.target.closest(
+            'a[data-cryptographic-navigation]'
+        );
+
+        /*
+        * Bukan link yang menggunakan CSB navigation.
+        */
+        if (!link) {
+            return;
+        }
+
+        /*
+        * Biarkan browser menangani:
+        *
+        * Ctrl + click
+        * Cmd + click
+        * Shift + click
+        * Alt + click
+        */
+        if (
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        /*
+        * Jika link membuka tab baru, jangan intercept.
+        */
+        if (
+            link.target &&
+            link.target !== '_self'
+        ) {
+            return;
+        }
+
+        const href = link.href;
+
+        if (!href) {
+            return;
+        }
+
+        const targetUrl = new URL(
+            href,
+            window.location.origin
+        );
+
+        /*
+        * Hanya intercept URL dari aplikasi sendiri.
+        */
+        if (
+            targetUrl.origin !== window.location.origin
+        ) {
+            return;
+        }
+
+        /*
+        * Cegah browser langsung melakukan:
+        *
+        * GET /transactions
+        *
+        * karena belum ada DPoP / navigation grant.
+        */
+        event.preventDefault();
+
+        /*
+        * Optional: cegah double click selama request berjalan.
+        */
+        if (link.dataset.navigationLoading === 'true') {
+            return;
+        }
+
+        link.dataset.navigationLoading = 'true';
+
+        try {
+            await navigateWithCryptographicProof(
+                targetUrl.href
+            );
+        } catch (error) {
+            console.error(
+                'Cryptographic navigation failed:',
+                error
+            );
+
+            alert(
+                error?.message ||
+                'Navigasi gagal karena cryptographic proof tidak valid.'
+            );
+
+            link.dataset.navigationLoading = 'false';
+        }
+    });
 
 })();
