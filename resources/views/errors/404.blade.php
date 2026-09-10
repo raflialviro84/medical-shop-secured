@@ -187,7 +187,7 @@
             <div class="text-group">
                 <h1 class="error-code">404</h1>
                 <div class="speech-bubble">
-                    This is not the web page you are looking for.
+                    Not Found!
                 </div>
             </div>
             
@@ -197,17 +197,5 @@
             </div>
         </div>
     </div>
-
-    <div class="bottom-section">
-        <p style="color: #586069; margin-bottom: 15px;">Find what you were looking for on our site:</p>
-        <div class="search-box">
-            <a href="{{ url('/') }}" class="btn-home">Return to Homepage</a>
-        </div>
-        
-        <div class="links">
-            <a href="#">Contact Support</a> — <a href="#">Status</a> — <a href="#">Services</a>
-        </div>
-    </div>
-
 </body>
 </html>

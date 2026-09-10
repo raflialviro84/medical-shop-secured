@@ -173,7 +173,8 @@
             <div class="text-group">
                 <h1 class="error-code">401</h1>
                 <div class="speech-bubble">
-                    You are not authorized to view this page.
+                    Unauthorized!
+                    <br>You are not authorized to view this page.
                 </div>
             </div>
             
@@ -183,18 +184,5 @@
             </div>
         </div>
     </div>
-
-    <div class="bottom-section">
-        <p style="color: #586069; margin-bottom: 15px;">Please log in to access this section.</p>
-        <div class="search-box">
-            <a href="{{ route('login') }}" class="btn-home">Go to Login</a>
-            <a href="{{ url('/') }}" class="btn-home">Return to Homepage</a>
-        </div>
-        
-        <div class="links">
-            <a href="#">Contact Support</a> — <a href="#">Status</a> — <a href="#">Services</a>
-        </div>
-    </div>
-
 </body>
 </html>

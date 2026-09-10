@@ -184,16 +184,5 @@
         </div>
     </div>
 
-    <div class="bottom-section">
-        <p style="color: #586069; margin-bottom: 15px;">Our servers are having a little trouble.</p>
-        <div class="search-box">
-            <a href="{{ url('/') }}" class="btn-home">Return to Homepage</a>
-        </div>
-        
-        <div class="links">
-            <a href="#">Contact Support</a> — <a href="#">Status</a> — <a href="#">Services</a>
-        </div>
-    </div>
-
 </body>
 </html>
