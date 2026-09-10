@@ -69,13 +69,13 @@ class VerifyCryptographicSession
          */
 
         if (!$request->user()) {
-            return response()->json([
-                'message' =>
-                    'Unauthenticated.',
-
-                'proof_valid' =>
-                    false,
-            ], 401);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                    'proof_valid' => false,
+                ], 401);
+            }
+            abort(401, 'Unauthenticated.');
         }
 
 
@@ -89,13 +89,13 @@ class VerifyCryptographicSession
             $request->header('DPoP');
 
         if (!$proof) {
-            return response()->json([
-                'message' =>
-                    'Cryptographic proof is required.',
-
-                'proof_valid' =>
-                    false,
-            ], 403);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Cryptographic proof is required.',
+                    'proof_valid' => false,
+                ], 403);
+            }
+            abort(403, 'Cryptographic proof is required.');
         }
 
 
@@ -113,13 +113,13 @@ class VerifyCryptographicSession
 
 
         if (!$result['valid']) {
-            return response()->json([
-                'message' =>
-                    $result['message'],
-
-                'proof_valid' =>
-                    false,
-            ], $result['status']);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $result['message'],
+                    'proof_valid' => false,
+                ], $result['status']);
+            }
+            abort($result['status'], $result['message']);
         }
 
 

@@ -472,8 +472,3 @@ Route::get('/error-preview/404', function () {
 Route::get('/error-preview/500', function () {
     return view('errors.500');
 });
-
-// Routing khusus untuk file error-view/403-forbiden (sesuai permintaan)
-Route::get('/error-preview/403-custom', function () {
-    return view('error-view.403-forbiden');
-});
