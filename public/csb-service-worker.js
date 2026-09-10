@@ -495,25 +495,22 @@ self.addEventListener(
 
 
                     /*
-                     * Fail closed.
+                     * Fail closed for navigation requests.
+                     * Fetch the 403 HTML page so the user sees a proper UI
+                     * instead of raw JSON on a full page load.
                      */
-                    return new Response(
-                        JSON.stringify({
-                            message:
-                                'Cryptographic proof is required.',
-
-                            proof_valid:
-                                false
-                        }),
-                        {
+                    try {
+                        const errorPageResponse = await fetch('/error-preview/403');
+                        return new Response(await errorPageResponse.text(), {
                             status: 403,
-
-                            headers: {
-                                'Content-Type':
-                                    'application/json'
-                            }
-                        }
-                    );
+                            headers: { 'Content-Type': 'text/html' }
+                        });
+                    } catch (e) {
+                        return new Response('<h1>403 Forbidden</h1><p>Cryptographic proof is required.</p>', {
+                            status: 403,
+                            headers: { 'Content-Type': 'text/html' }
+                        });
+                    }
                 }
             })()
         );
