@@ -452,3 +452,28 @@ Route::middleware([
         )->name('transactions.ship');
 
     });
+
+
+// ======================================================
+// Error Page Preview Routes (For testing purposes)
+// ======================================================
+Route::get('/error-preview/401', function () {
+    return view('errors.401');
+});
+
+Route::get('/error-preview/403', function () {
+    return view('errors.403');
+});
+
+Route::get('/error-preview/404', function () {
+    return view('errors.404');
+});
+
+Route::get('/error-preview/500', function () {
+    return view('errors.500');
+});
+
+// Routing khusus untuk file error-view/403-forbiden (sesuai permintaan)
+Route::get('/error-preview/403-custom', function () {
+    return view('error-view.403-forbiden');
+});
