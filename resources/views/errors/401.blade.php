@@ -184,5 +184,29 @@
             </div>
         </div>
     </div>
+
+    <div>
+        <div class="bottom-section">
+            <p>Anda akan diarahkan ke halaman login dalam <span id="countdown">20</span> detik.</p>
+            <a class="btn-home" href="{{ route('login') }}">Login sekarang</a>
+        </div>
+    </div>
+
+    <script>
+        const loginUrl = @json(route('login'));
+        let remainingSeconds = 20;
+        const countdown = document.getElementById('countdown');
+
+        const redirectTimer = setInterval(() => {
+            remainingSeconds -= 1;
+            countdown.textContent = remainingSeconds;
+
+            if (remainingSeconds <= 0) {
+                clearInterval(redirectTimer);
+                window.location.href = loginUrl;
+            }
+        }, 1000);
+    </script>
+
 </body>
 </html>
