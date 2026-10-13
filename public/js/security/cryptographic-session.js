@@ -44,7 +44,13 @@
             };
 
             request.onsuccess = function (event) {
-                resolve(event.target.result);
+                const db = event.target.result;
+
+                db.onversionchange = function () {
+                    db.close();
+                };
+
+                resolve(db);
             };
 
             request.onerror = function () {
@@ -82,6 +88,18 @@
             request.onerror = function () {
                 reject(request.error);
             };
+
+            transaction.oncomplete = function () {
+                db.close();
+            };
+
+            transaction.onerror = function () {
+                db.close();
+            };
+
+            transaction.onabort = function () {
+                db.close();
+            };
         });
     }
 
@@ -109,6 +127,18 @@
 
             request.onerror = function () {
                 reject(request.error);
+            };
+
+            transaction.oncomplete = function () {
+                db.close();
+            };
+
+            transaction.onerror = function () {
+                db.close();
+            };
+
+            transaction.onabort = function () {
+                db.close();
             };
         });
     }
@@ -140,6 +170,18 @@
 
             request.onerror = function () {
                 reject(request.error);
+            };
+
+            transaction.oncomplete = function () {
+                db.close();
+            };
+
+            transaction.onerror = function () {
+                db.close();
+            };
+
+            transaction.onabort = function () {
+                db.close();
             };
         });
     }
@@ -175,14 +217,43 @@
             request.onerror = function () {
                 reject(request.error);
             };
+
+            transaction.oncomplete = function () {
+                db.close();
+            };
+
+            transaction.onerror = function () {
+                db.close();
+            };
+
+            transaction.onabort = function () {
+                db.close();
+            };
         });
     }
 
 
     async function clearCryptographicState() {
-        await deleteValue(PRIVATE_KEY_NAME);
-        await deleteValue(PUBLIC_KEY_NAME);
-        await deleteValue(BINDING_ID_NAME);
+        await new Promise((resolve, reject) => {
+            const request =
+                indexedDB.deleteDatabase(DB_NAME);
+
+            request.onsuccess = function () {
+                resolve();
+            };
+
+            request.onerror = function () {
+                reject(request.error);
+            };
+
+            request.onblocked = function () {
+                reject(
+                    new Error(
+                        'IndexedDB masih digunakan oleh koneksi lain.'
+                    )
+                );
+            };
+        });
 
         console.log(
             '[CSB] Cryptographic session state berhasil dibersihkan.'
@@ -731,6 +802,13 @@
             );
         }
 
+        if (
+            response.status === 401 ||
+            response.status === 403
+        ) {
+            await clearCryptographicState();
+        }
+
         if (!response.ok) {
             throw new Error(
                 data.message ||
@@ -823,7 +901,7 @@
             );
         }
 
-        return fetch(
+        const response = await fetch(
             absoluteUrl.pathname +
             absoluteUrl.search,
             {
@@ -838,6 +916,15 @@
                     'same-origin'
             }
         );
+
+        if (
+            response.status === 401 ||
+            response.status === 403
+        ) {
+            await clearCryptographicState();
+        }
+
+        return response;
     }
 
 
@@ -871,6 +958,11 @@
     }
 
 
+    function isLoginPage() {
+        return window.location.pathname === '/login';
+    }
+
+
     // =====================================================
     // Initialize Cryptographic Session
     // =====================================================
@@ -886,6 +978,15 @@
             // -------------------------------------------------
 
             if (!status.authenticated) {
+                /*
+                 * Pada halaman login, key pair baru sudah disiapkan
+                 * untuk dikirim oleh form login. Jangan menghapusnya
+                 * lagi saat status guest diperiksa.
+                 */
+                if (!isLoginPage()) {
+                    await clearCryptographicState();
+                }
+
                 return null;
             }
 
@@ -902,6 +1003,8 @@
                 console.error(
                     '[CSB] Session authenticated tetapi belum memiliki binding.'
                 );
+
+                await clearCryptographicState();
 
                 return {
                     authenticated: true,
@@ -1014,6 +1117,8 @@
                         !!publicKey
                 }
             );
+
+            await clearCryptographicState();
 
             return {
                 authenticated: true,
@@ -1161,6 +1266,22 @@
         async () => {
 
             /*
+             * Halaman login tidak boleh mewarisi state dari sesi
+             * sebelumnya. Key pair baru akan dibuat setelah database
+             * lama dihapus karena public key diperlukan oleh form login.
+             */
+            if (isLoginPage()) {
+                try {
+                    await clearCryptographicState();
+                } catch (error) {
+                    console.error(
+                        '[CSB] Gagal membersihkan state sebelum login:',
+                        error
+                    );
+                }
+            }
+
+            /*
              * 1. Register Service Worker.
              */
             await registerCryptographicServiceWorker();
@@ -1172,6 +1293,14 @@
              */
             await prepareLoginPublicKey();
 
+            /*
+             * Halaman login sedang menyiapkan key untuk autentikasi
+             * berikutnya. Jangan validasi binding session lama karena
+             * hasil revoke dapat menghapus key baru yang sudah dibuat.
+             */
+            if (isLoginPage()) {
+                return;
+            }
 
             /*
              * 3. Periksa status cryptographic

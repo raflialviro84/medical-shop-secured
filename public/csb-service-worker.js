@@ -65,7 +65,13 @@ function openDatabase() {
         };
 
         request.onsuccess = function (event) {
-            resolve(event.target.result);
+            const db = event.target.result;
+
+            db.onversionchange = function () {
+                db.close();
+            };
+
+            resolve(db);
         };
 
         request.onerror = function () {
@@ -98,12 +104,44 @@ async function getValue(name) {
         request.onerror = function () {
             reject(request.error);
         };
+
+        transaction.oncomplete = function () {
+            db.close();
+        };
+
+        transaction.onerror = function () {
+            db.close();
+        };
+
+        transaction.onabort = function () {
+            db.close();
+        };
     });
 }
 
 
 async function getKey(name) {
     return await getValue(name);
+}
+
+
+function clearCryptographicState() {
+    return new Promise((resolve, reject) => {
+        const request =
+            indexedDB.deleteDatabase(DB_NAME);
+
+        request.onsuccess = resolve;
+        request.onerror = function () {
+            reject(request.error);
+        };
+        request.onblocked = function () {
+            reject(
+                new Error(
+                    'IndexedDB masih digunakan oleh koneksi lain.'
+                )
+            );
+        };
+    });
 }
 
 
@@ -482,9 +520,18 @@ self.addEventListener(
                         );
 
 
-                    return await fetch(
+                    const response = await fetch(
                         protectedRequest
                     );
+
+                    if (
+                        response.status === 401 ||
+                        response.status === 403
+                    ) {
+                        await clearCryptographicState();
+                    }
+
+                    return response;
 
                 } catch (error) {
 

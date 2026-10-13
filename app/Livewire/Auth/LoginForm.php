@@ -263,7 +263,12 @@ class LoginForm extends Component
          * 9. Login berhasil
          * ==================================================
          */
-        return redirect()->intended(
+        /*
+         * Home adalah public navigation. Beri halaman tersebut
+         * kesempatan menyimpan binding ID baru ke IndexedDB sebelum
+         * navigasi berikutnya membutuhkan DPoP dari service worker.
+         */
+        return redirect(
             route('home')
         );
     }
