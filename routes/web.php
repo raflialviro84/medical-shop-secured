@@ -88,10 +88,22 @@ Route::get(
 // Authentication routes
 // ======================================================
 
-Route::view('/login', 'auth.login')
+Route::get('/login', function (Request $request) {
+    if ($request->user()) {
+        return redirect()->route('home');
+    }
+
+    return view('auth.login');
+})
     ->name('login');
 
-Route::view('/register', 'auth.register')
+Route::get('/register', function (Request $request) {
+    if ($request->user()) {
+        return redirect()->route('home');
+    }
+
+    return view('auth.register');
+})
     ->name('register');
 
 
