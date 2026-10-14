@@ -472,3 +472,7 @@ Route::get('/error-preview/404', function () {
 Route::get('/error-preview/500', function () {
     return view('errors.500');
 });
+
+Route::fallback(function () {
+    return response()->view('errors.404', [], 404);
+});

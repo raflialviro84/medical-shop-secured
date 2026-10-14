@@ -540,21 +540,21 @@ self.addEventListener(
                         error
                     );
 
-
                     /*
-                     * Fail closed for navigation requests.
-                     * Fetch the 403 HTML page so the user sees a proper UI
-                     * instead of raw JSON on a full page load.
+                     * Keep the server response for routes that are not
+                     * protected, especially Laravel's 404 fallback.
+                     * A missing proof must not turn an unknown URL into 403.
                      */
                     try {
-                        const errorPageResponse = await fetch('/error-preview/403');
-                        return new Response(await errorPageResponse.text(), {
-                            status: 403,
-                            headers: { 'Content-Type': 'text/html' }
-                        });
-                    } catch (e) {
-                        return new Response('<h1>403 Forbidden</h1><p>Cryptographic proof is required.</p>', {
-                            status: 403,
+                        return await fetch(request);
+                    } catch (fallbackError) {
+                        console.error(
+                            '[CSB SW] Fallback navigation gagal:',
+                            fallbackError
+                        );
+
+                        return new Response('Service Unavailable', {
+                            status: 503,
                             headers: { 'Content-Type': 'text/html' }
                         });
                     }
