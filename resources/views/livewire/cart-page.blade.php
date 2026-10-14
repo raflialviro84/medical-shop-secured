@@ -68,7 +68,11 @@
                 </div>
                 <p class="mt-0.5 text-sm text-gray-500">Shipping and taxes calculated at checkout.</p>
                 <div class="mt-6">
-                    <form action="{{ route('transactions.store') }}" method="POST">
+                    <form
+                        action="{{ route('transactions.store') }}"
+                        method="POST"
+                        data-csb-protected
+                    >
                         @csrf
                         <button type="submit" class="w-full flex justify-center items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                             Checkout

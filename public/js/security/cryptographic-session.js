@@ -1379,4 +1379,71 @@
         }
     );
 
+
+    // Native protected forms need the same DPoP proof as programmatic requests.
+    document.addEventListener(
+        'submit',
+        async (event) => {
+
+            const form =
+                event.target;
+
+            if (
+                !(form instanceof HTMLFormElement) ||
+                !form.hasAttribute('data-csb-protected')
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const submitButton =
+                form.querySelector('button[type="submit"]');
+
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            try {
+                const response =
+                    await requestWithCryptographicProof(
+                        form.action,
+                        {
+                            method: form.method || 'POST',
+                            body: new FormData(form),
+                            redirect: 'manual',
+                        }
+                    );
+
+                if (
+                    response.status >= 300 &&
+                    response.status < 400
+                ) {
+                    const location =
+                        response.headers.get('Location');
+
+                    if (!location) {
+                        throw new Error(
+                            'Redirect checkout tidak memiliki tujuan.'
+                        );
+                    }
+
+                    window.location.assign(location);
+                    return;
+                }
+
+                window.location.reload();
+            } catch (error) {
+                console.error(
+                    '[CSB] Protected form submission failed:',
+                    error
+                );
+
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+            }
+        }
+    );
+
 })();
