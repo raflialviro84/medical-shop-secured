@@ -8,11 +8,18 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
+        "csb/laravel-cryptographic-session": "@dev",
         "dompdf/dompdf": "^3.1",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "livewire/livewire": "^3.6"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/laravel-cryptographic-session"
+        }
+    ],
     "require-dev": {
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.2",

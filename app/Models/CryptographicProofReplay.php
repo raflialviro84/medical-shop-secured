@@ -2,29 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use CryptographicSession\Models\CryptographicProofReplay as BaseCryptographicProofReplay;
 
-class CryptographicProofReplay extends Model
+/**
+ * Backward compatibility alias for the modular Cryptographic Proof Replay model.
+ */
+class CryptographicProofReplay extends BaseCryptographicProofReplay
 {
-    protected $fillable = [
-        'jti',
-        'binding_id',
-        'issued_at',
-        'expires_at',
-    ];
-
-    protected $casts = [
-        'binding_id' => 'integer',
-        'issued_at' => 'datetime',
-        'expires_at' => 'datetime',
-    ];
-
-    public function binding(): BelongsTo
-    {
-        return $this->belongsTo(
-            CryptographicSessionBinding::class,
-            'binding_id'
-        );
-    }
 }
